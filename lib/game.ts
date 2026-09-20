@@ -116,12 +116,12 @@ export const DEFAULT_STAT_XP: Record<StatKey, number> = {
 };
 
 export const DEFAULT_QUEST = {
-  id: "tre-flip",
-  name: "Tre Flip",
-  description: "Clean the switch tre flip with no hesitation.",
+  id: "back-seat-weight-distribution",
+  name: "Back seat weight distribution",
+  description: "Keep your weight centered and controlled through the back seat.",
   targetHours: 100,
-  completedHours: 61,
-  startedAt: "2025-02-12",
+  completedHours: 0,
+  startedAt: "",
   status: "active" as "active" | "completed",
   completionBonusXp: 2000,
 };
