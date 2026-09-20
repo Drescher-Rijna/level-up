@@ -97,6 +97,7 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
   const [authPassword, setAuthPassword] = useState("");
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
+  const [remoteStateError, setRemoteStateError] = useState("");
   const supabaseClient = getSupabaseClient();
 
   useEffect(() => {
@@ -127,12 +128,13 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
       return;
     }
 
+    setRemoteStateError("");
     void loadUserState(user)
       .then((remoteState) => {
         setAppState((current) => ({ ...current, ...remoteState }));
       })
       .catch((error: Error) => {
-        setAuthMessage(`Could not load your Supabase data: ${error.message}`);
+        setRemoteStateError(error.message);
       });
   }, [mounted, user]);
 
@@ -270,6 +272,22 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
   }
 
   const authenticatedUser = user;
+
+  if (remoteStateError) {
+    return (
+      <div className="min-h-screen bg-[#0b0b0c] px-4 py-6 text-slate-100">
+        <div className="mx-auto max-w-xl rounded-3xl border border-red-500/30 bg-red-500/10 p-6">
+          <p className="text-xs uppercase tracking-[0.32em] text-red-200">Supabase sync error</p>
+          <h1 className="mt-3 text-2xl font-black text-white">Your account is signed in, but data is not available yet.</h1>
+          <p className="mt-3 text-sm leading-6 text-red-100">{remoteStateError}</p>
+          <p className="mt-4 text-sm leading-6 text-slate-300">
+            Run the SQL in <code className="text-amber-200">supabase/schema.sql</code> in your Supabase SQL Editor, then refresh this page.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const statEntries = Object.entries(STAT_META) as [StatKey, (typeof STAT_META)[StatKey]][];
 
   async function awardTaskXp(task: Task) {
