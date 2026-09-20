@@ -128,7 +128,6 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
       return;
     }
 
-    setRemoteStateError("");
     void loadUserState(user)
       .then((remoteState) => {
         setAppState((current) => ({ ...current, ...remoteState }));
