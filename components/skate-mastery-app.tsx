@@ -530,28 +530,6 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
                 </section>
 
                 <section className="rounded-3xl border border-white/10 bg-[#111214] p-5 shadow-xl shadow-black/20">
-                  <h2 className="text-2xl font-black tracking-tight text-white">Quest Templates</h2>
-                  <p className="mt-2 text-sm text-slate-300">
-                    Choose one deliberate practice project to make your current quest.
-                  </p>
-                  <div className="mt-5 grid gap-3 md:grid-cols-2">
-                    {appState.questTemplates.map((template) => (
-                      <div key={template.id} className="rounded-2xl border border-white/10 bg-black/15 p-4">
-                        <p className="text-lg font-bold text-white">{template.name}</p>
-                        <p className="mt-2 text-sm text-slate-300">{template.description}</p>
-                        <button
-                          type="button"
-                          onClick={() => void startQuest(template)}
-                          className="mt-4 rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-sm font-bold text-amber-200 transition hover:bg-amber-400/20"
-                        >
-                          Start this quest
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-
-                <section className="rounded-3xl border border-white/10 bg-[#111214] p-5 shadow-xl shadow-black/20">
                   <h2 className="text-xl font-bold tracking-tight text-white">Current Quest</h2>
                   <div className="mt-4 rounded-2xl border border-white/10 bg-black/15 p-4">
                     <p className="text-xs uppercase tracking-[0.32em] text-slate-400">{appState.quest.status === "completed" ? "Completed" : "In progress"}</p>
@@ -581,6 +559,28 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
                 <div className="mt-4 flex items-center gap-3">
                   <span className="text-4xl">🔥</span>
                   <p className="text-3xl font-black text-amber-200">{currentStreak} DAYS</p>
+                </div>
+              </section>
+
+              <section className="rounded-3xl border border-white/10 bg-[#111214] p-5 shadow-xl shadow-black/20">
+                <h2 className="text-2xl font-black tracking-tight text-white">Quest Templates</h2>
+                <p className="mt-2 text-sm text-slate-300">
+                  Choose one deliberate practice project to make your current quest.
+                </p>
+                <div className="mt-5 grid gap-3 md:grid-cols-2">
+                  {appState.questTemplates.map((template) => (
+                    <div key={template.id} className="rounded-2xl border border-white/10 bg-black/15 p-4">
+                      <p className="text-lg font-bold text-white">{template.name}</p>
+                      <p className="mt-2 text-sm text-slate-300">{template.description}</p>
+                      <button
+                        type="button"
+                        onClick={() => void startQuest(template)}
+                        className="mt-4 rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-sm font-bold text-amber-200 transition hover:bg-amber-400/20"
+                      >
+                        Start this quest
+                      </button>
+                    </div>
+                  ))}
                 </div>
               </section>
 
