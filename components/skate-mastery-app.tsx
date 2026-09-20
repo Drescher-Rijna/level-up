@@ -563,28 +563,6 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
               </section>
 
               <section className="rounded-3xl border border-white/10 bg-[#111214] p-5 shadow-xl shadow-black/20">
-                <h2 className="text-2xl font-black tracking-tight text-white">Quest Templates</h2>
-                <p className="mt-2 text-sm text-slate-300">
-                  Choose one deliberate practice project to make your current quest.
-                </p>
-                <div className="mt-5 grid gap-3 md:grid-cols-2">
-                  {appState.questTemplates.map((template) => (
-                    <div key={template.id} className="rounded-2xl border border-white/10 bg-black/15 p-4">
-                      <p className="text-lg font-bold text-white">{template.name}</p>
-                      <p className="mt-2 text-sm text-slate-300">{template.description}</p>
-                      <button
-                        type="button"
-                        onClick={() => void startQuest(template)}
-                        className="mt-4 rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-sm font-bold text-amber-200 transition hover:bg-amber-400/20"
-                      >
-                        Start this quest
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              <section className="rounded-3xl border border-white/10 bg-[#111214] p-5 shadow-xl shadow-black/20">
                 <h2 className="text-xl font-bold text-white">Total Skating</h2>
                 <div className="mt-4 flex items-end gap-2">
                   <span className="text-3xl font-black text-white">{appState.totalSkateHours.toFixed(1)}</span>
@@ -697,6 +675,28 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
                     +{appState.quest.completionBonusXp} XP completion bonus awarded.
                   </div>
                 )}
+              </div>
+            </section>
+
+            <section className="rounded-3xl border border-white/10 bg-[#111214] p-5 shadow-xl shadow-black/20">
+              <h2 className="text-2xl font-black tracking-tight text-white">Quest Templates</h2>
+              <p className="mt-2 text-sm text-slate-300">
+                Choose one deliberate practice project to make your current quest.
+              </p>
+              <div className="mt-5 grid gap-3 md:grid-cols-2">
+                {appState.questTemplates.map((template) => (
+                  <div key={template.id} className="rounded-2xl border border-white/10 bg-black/15 p-4">
+                    <p className="text-lg font-bold text-white">{template.name}</p>
+                    <p className="mt-2 text-sm text-slate-300">{template.description}</p>
+                    <button
+                      type="button"
+                      onClick={() => void startQuest(template)}
+                      className="mt-4 rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-sm font-bold text-amber-200 transition hover:bg-amber-400/20"
+                    >
+                      Start this quest
+                    </button>
+                  </div>
+                ))}
               </div>
             </section>
 
