@@ -11,3 +11,11 @@ export const supabase =
 export function getSupabaseClient() {
   return supabase;
 }
+
+export function getSupabaseConfigurationError() {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return "Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local.";
+  }
+
+  return null;
+}

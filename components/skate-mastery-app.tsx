@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import type { User } from "@supabase/supabase-js";
 import {
   DEFAULT_MILESTONES,
   DEFAULT_QUEST,
@@ -18,21 +19,11 @@ import {
   getLevelData,
   getSkatingYear,
 } from "@/lib/game";
+import type { AppState } from "@/lib/state-types";
+import { completeTask, ensureUserProfile, loadUserState, logQuestHours } from "@/lib/persistence";
+import { getSupabaseClient, getSupabaseConfigurationError } from "@/lib/supabase";
 
 type AppView = "home" | "stats" | "quests" | "settings";
-
-type AppState = {
-  displayName: string;
-  skatingStartDate: string;
-  totalXp: number;
-  statXp: Record<StatKey, number>;
-  tasks: Task[];
-  completedToday: Record<string, boolean>;
-  completedDates: string[];
-  quest: typeof DEFAULT_QUEST;
-  totalSkateHours: number;
-  questBonusAwarded: boolean;
-};
 
 function addDays(date: Date, days: number) {
   const nextDate = new Date(date);
@@ -101,21 +92,55 @@ function ProgressBar({ percent }: { percent: number }) {
 export default function SkateMasteryApp({ view }: { view: AppView }) {
   const [mounted, setMounted] = useState(false);
   const [appState, setAppState] = useState<AppState>(buildDefaultState);
+  const [user, setUser] = useState<User | null>(null);
+  const [authEmail, setAuthEmail] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
+  const supabaseClient = getSupabaseClient();
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setAppState(readState());
-  }, []);
+    if (!supabaseClient) {
+      setAppState(readState());
+      return;
+    }
+
+    void supabaseClient.auth.getSession().then(({ data, error }) => {
+      if (error) {
+        setAuthMessage(error.message);
+        return;
+      }
+      setUser(data.session?.user ?? null);
+    });
+
+    const { data: authSubscription } = supabaseClient.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => authSubscription.subscription.unsubscribe();
+  }, [supabaseClient]);
 
   useEffect(() => {
-    if (!mounted || typeof window === "undefined") {
+    if (!mounted || !user) {
+      return;
+    }
+
+    void loadUserState(user)
+      .then((remoteState) => {
+        setAppState((current) => ({ ...current, ...remoteState }));
+      })
+      .catch((error: Error) => {
+        setAuthMessage(`Could not load your Supabase data: ${error.message}`);
+      });
+  }, [mounted, user]);
+
+  useEffect(() => {
+    if (!mounted || user || typeof window === "undefined") {
       return;
     }
 
     window.localStorage.setItem("skate-mastery-state", JSON.stringify(appState));
-  }, [appState, mounted]);
+  }, [appState, mounted, user]);
 
   const levelData = useMemo(() => getLevelData(appState.totalXp), [appState.totalXp]);
 
@@ -148,9 +173,70 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
     );
   }
 
+  if (getSupabaseConfigurationError()) {
+    return (
+      <div className="min-h-screen bg-[#0b0b0c] px-4 py-6 text-slate-100">
+        <div className="mx-auto max-w-xl rounded-3xl border border-red-500/30 bg-red-500/10 p-6">
+          <h1 className="text-2xl font-black text-white">Supabase configuration needed</h1>
+          <p className="mt-3 text-sm leading-6 text-red-100">
+            {getSupabaseConfigurationError()}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#0b0b0c] px-4 py-6 text-slate-100">
+        <div className="mx-auto max-w-md rounded-3xl border border-white/10 bg-[#111214] p-6 shadow-xl shadow-black/20">
+          <p className="text-xs uppercase tracking-[0.38em] text-amber-300">Skate Mastery</p>
+          <h1 className="mt-3 text-3xl font-black text-white">Sign in to save your progression</h1>
+          <p className="mt-3 text-sm leading-6 text-slate-300">
+            We will email you a secure magic link. No password required.
+          </p>
+          <form
+            className="mt-6 space-y-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!supabaseClient || !authEmail.trim()) return;
+              setAuthMessage("");
+              void supabaseClient.auth
+                .signInWithOtp({ email: authEmail.trim(), options: { emailRedirectTo: window.location.origin } })
+                .then(({ error }) => {
+                  setAuthMessage(error ? error.message : "Check your email for the sign-in link.");
+                });
+            }}
+          >
+            <input
+              type="email"
+              required
+              value={authEmail}
+              onChange={(event) => setAuthEmail(event.target.value)}
+              placeholder="you@example.com"
+              className="w-full rounded-2xl border border-white/10 bg-zinc-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-400"
+            />
+            <button className="w-full rounded-2xl bg-amber-400 px-5 py-3 font-bold text-zinc-950 transition hover:bg-amber-300">
+              Email me a sign-in link
+            </button>
+          </form>
+          {authMessage && <p className="mt-4 text-sm text-amber-100">{authMessage}</p>}
+        </div>
+      </div>
+    );
+  }
+
+  const authenticatedUser = user;
   const statEntries = Object.entries(STAT_META) as [StatKey, (typeof STAT_META)[StatKey]][];
 
-  function awardTaskXp(task: Task) {
+  async function awardTaskXp(task: Task) {
+    try {
+      await completeTask(authenticatedUser, task.id, getCurrentDateKey());
+    } catch (error) {
+      setAuthMessage(`Could not save task completion: ${(error as Error).message}`);
+      return;
+    }
+
     setAppState((current) => {
       if (current.completedToday[task.id]) {
         return current;
@@ -170,7 +256,14 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
     });
   }
 
-  function updateQuestHours(hoursToAdd: number) {
+  async function updateQuestHours(hoursToAdd: number) {
+    try {
+      await logQuestHours(authenticatedUser, appState.quest.id, hoursToAdd);
+    } catch (error) {
+      setAuthMessage(`Could not save quest hours: ${(error as Error).message}`);
+      return;
+    }
+
     setAppState((current) => {
       const nextCompletedHours = current.quest.completedHours + hoursToAdd;
       let nextQuest = { ...current.quest, completedHours: Math.min(nextCompletedHours, current.quest.targetHours) };
@@ -191,6 +284,14 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
         totalSkateHours: Number((current.totalSkateHours + hoursToAdd).toFixed(1)),
       };
     });
+  }
+
+  async function saveProfile(displayName: string, skatingStartDate: string) {
+    try {
+      await ensureUserProfile(authenticatedUser, displayName, skatingStartDate);
+    } catch (error) {
+      setAuthMessage(`Could not save profile: ${(error as Error).message}`);
+    }
   }
 
   const navItems = [
@@ -266,7 +367,6 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
                     {appState.tasks.filter((task) => appState.completedToday[task.id]).length}/{appState.tasks.length}
                   </span>
                 </div>
-
                 <div className="space-y-3">
                   {appState.tasks.map((task) => {
                     const isCompleted = Boolean(appState.completedToday[task.id]);
@@ -518,7 +618,9 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
                   <input
                     value={appState.displayName}
                     onChange={(event) => {
-                      setAppState((current) => ({ ...current, displayName: event.target.value }));
+                      const displayName = event.target.value;
+                      setAppState((current) => ({ ...current, displayName }));
+                      void saveProfile(displayName, appState.skatingStartDate);
                     }}
                     className="w-full rounded-2xl border border-white/10 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-amber-400"
                   />
@@ -531,7 +633,9 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
                     type="date"
                     value={appState.skatingStartDate}
                     onChange={(event) => {
-                      setAppState((current) => ({ ...current, skatingStartDate: event.target.value }));
+                      const skatingStartDate = event.target.value;
+                      setAppState((current) => ({ ...current, skatingStartDate }));
+                      void saveProfile(appState.displayName, skatingStartDate);
                     }}
                     className="w-full rounded-2xl border border-white/10 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-amber-400"
                   />
