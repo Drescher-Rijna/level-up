@@ -5,6 +5,7 @@ import {
   DEFAULT_USER_PROFILE,
 } from "@/lib/game";
 import type { AppState } from "@/lib/state-types";
+import type { QuestTemplate } from "@/lib/state-types";
 import type { StatKey, Task } from "@/lib/game";
 import { getCurrentDateKey } from "@/lib/game";
 import { supabase } from "@/lib/supabase";
@@ -15,16 +16,17 @@ export async function loadUserState(user: User): Promise<Partial<AppState>> {
   }
 
   const today = getCurrentDateKey();
-  const [profileResult, tasksResult, completionsResult, questResult, sessionsResult] =
-    await Promise.all([
+  const results = await Promise.all([
       supabase.from("profiles").select("display_name, skating_start_date").eq("id", user.id).maybeSingle(),
       supabase.from("tasks").select("id, name, description, stat, xp, active, frequency").eq("active", true).order("created_at"),
       supabase.from("daily_completions").select("task_id, completion_date, xp_awarded").eq("user_id", user.id),
       supabase.from("quests").select("*").eq("user_id", user.id).eq("status", "active").order("created_at", { ascending: false }).limit(1).maybeSingle(),
       supabase.from("skate_sessions").select("hours").eq("user_id", user.id),
+      supabase.from("quest_templates").select("id, name, description, target_hours, completion_bonus_xp").eq("active", true).order("sort_order"),
     ]);
 
-  const firstError = [profileResult, tasksResult, completionsResult, questResult, sessionsResult].find(
+  const [profileResult, tasksResult, completionsResult, questResult, sessionsResult, questTemplatesResult] = results;
+  const firstError = [profileResult, tasksResult, completionsResult, questResult, sessionsResult, questTemplatesResult].find(
     (result) => result.error,
   );
   if (firstError?.error) {
@@ -47,6 +49,13 @@ export async function loadUserState(user: User): Promise<Partial<AppState>> {
   }
 
   const profile = profileResult.data;
+  const questTemplates: QuestTemplate[] = (questTemplatesResult.data ?? []).map((template) => ({
+    id: template.id,
+    name: template.name,
+    description: template.description,
+    targetHours: Number(template.target_hours),
+    completionBonusXp: template.completion_bonus_xp,
+  }));
   let quest = questResult.data;
 
   if (!quest) {
@@ -97,6 +106,7 @@ export async function loadUserState(user: User): Promise<Partial<AppState>> {
       : { ...DEFAULT_QUEST },
     totalSkateHours: (sessionsResult.data ?? []).reduce((sum, session) => sum + Number(session.hours), 0),
     questBonusAwarded: Boolean(quest?.status === "completed"),
+    questTemplates,
   };
 }
 
@@ -152,4 +162,35 @@ export async function logSkateHours(user: User, hours: number) {
     session_date: getCurrentDateKey(),
   });
   if (error) throw new Error(error.message);
+}
+
+export async function startQuestFromTemplate(user: User, template: QuestTemplate) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+
+  const { data: quest, error } = await supabase
+    .from("quests")
+    .insert({
+      user_id: user.id,
+      name: template.name,
+      description: template.description,
+      target_hours: template.targetHours,
+      completed_hours: 0,
+      status: "active",
+      started_at: getCurrentDateKey(),
+      completion_bonus_xp: template.completionBonusXp,
+    })
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+
+  return {
+    id: quest.id,
+    name: quest.name,
+    description: quest.description,
+    targetHours: Number(quest.target_hours),
+    completedHours: Number(quest.completed_hours),
+    startedAt: quest.started_at,
+    status: quest.status,
+    completionBonusXp: quest.completion_bonus_xp,
+  };
 }

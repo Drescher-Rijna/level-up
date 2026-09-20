@@ -1,6 +1,14 @@
 import type { DEFAULT_QUEST } from "@/lib/game";
 import type { StatKey, Task } from "@/lib/game";
 
+export type QuestTemplate = {
+  id: string;
+  name: string;
+  description: string;
+  targetHours: number;
+  completionBonusXp: number;
+};
+
 export type AppState = {
   displayName: string;
   skatingStartDate: string;
@@ -12,4 +20,5 @@ export type AppState = {
   quest: typeof DEFAULT_QUEST;
   totalSkateHours: number;
   questBonusAwarded: boolean;
+  questTemplates: QuestTemplate[];
 };

@@ -19,11 +19,27 @@ import {
   getLevelData,
   getSkatingYear,
 } from "@/lib/game";
-import type { AppState } from "@/lib/state-types";
-import { completeTask, ensureUserProfile, loadUserState, logQuestHours } from "@/lib/persistence";
+import type { AppState, QuestTemplate } from "@/lib/state-types";
+import {
+  completeTask,
+  ensureUserProfile,
+  loadUserState,
+  logQuestHours,
+  startQuestFromTemplate,
+} from "@/lib/persistence";
 import { getSupabaseClient, getSupabaseConfigurationError } from "@/lib/supabase";
 
 type AppView = "home" | "stats" | "quests" | "settings";
+
+const DEFAULT_QUEST_TEMPLATES: QuestTemplate[] = [
+  { id: "back-seat-weight-distribution", name: "Back seat weight distribution", description: "Keep your weight centered and controlled through the back seat.", targetHours: 100, completionBonusXp: 2000 },
+  { id: "floating-on-your-tricks", name: "Floating on your tricks", description: "Build a lighter, more effortless feeling in your tricks.", targetHours: 100, completionBonusXp: 2000 },
+  { id: "keep-the-board-in-front-of-you", name: "Keep the board in front of you", description: "Practice staying connected to the board through the full trick.", targetHours: 100, completionBonusXp: 2000 },
+  { id: "separate-shoulders-and-hips", name: "Separate shoulders and hips", description: "Develop independent control of your shoulders and hips.", targetHours: 100, completionBonusXp: 2000 },
+  { id: "pinching-your-truck", name: "Pinching your truck", description: "Practice a consistent, controlled pinch on the truck.", targetHours: 100, completionBonusXp: 2000 },
+  { id: "keeping-speed-on-exit", name: "Keeping speed on exit", description: "Carry useful speed through the landing and exit.", targetHours: 100, completionBonusXp: 2000 },
+  { id: "doing-tricks-with-speed", name: "Doing tricks with speed", description: "Build confidence and control while practicing with speed.", targetHours: 100, completionBonusXp: 2000 },
+];
 
 function addDays(date: Date, days: number) {
   const nextDate = new Date(date);
@@ -52,6 +68,7 @@ function buildDefaultState(): AppState {
     quest: { ...DEFAULT_QUEST },
     totalSkateHours: DEFAULT_TOTAL_SKATE_HOURS,
     questBonusAwarded: false,
+    questTemplates: DEFAULT_QUEST_TEMPLATES,
   };
 }
 
@@ -72,6 +89,7 @@ function readState() {
       ...parsed,
       statXp: { ...DEFAULT_STAT_XP, ...(parsed.statXp ?? {}) },
       tasks: parsed.tasks ?? DEFAULT_TASKS,
+      questTemplates: parsed.questTemplates ?? DEFAULT_QUEST_TEMPLATES,
     };
   } catch {
     return buildDefaultState();
@@ -346,6 +364,19 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
     });
   }
 
+  async function startQuest(template: QuestTemplate) {
+    try {
+      const quest = await startQuestFromTemplate(authenticatedUser, template);
+      setAppState((current) => ({
+        ...current,
+        quest,
+        questBonusAwarded: false,
+      }));
+    } catch (error) {
+      setAuthMessage(`Could not start quest: ${(error as Error).message}`);
+    }
+  }
+
   async function saveProfile(displayName: string, skatingStartDate: string) {
     try {
       await ensureUserProfile(authenticatedUser, displayName, skatingStartDate);
@@ -495,6 +526,28 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
                         </div>
                       );
                     })}
+                  </div>
+                </section>
+
+                <section className="rounded-3xl border border-white/10 bg-[#111214] p-5 shadow-xl shadow-black/20">
+                  <h2 className="text-2xl font-black tracking-tight text-white">Quest Templates</h2>
+                  <p className="mt-2 text-sm text-slate-300">
+                    Choose one deliberate practice project to make your current quest.
+                  </p>
+                  <div className="mt-5 grid gap-3 md:grid-cols-2">
+                    {appState.questTemplates.map((template) => (
+                      <div key={template.id} className="rounded-2xl border border-white/10 bg-black/15 p-4">
+                        <p className="text-lg font-bold text-white">{template.name}</p>
+                        <p className="mt-2 text-sm text-slate-300">{template.description}</p>
+                        <button
+                          type="button"
+                          onClick={() => void startQuest(template)}
+                          className="mt-4 rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-sm font-bold text-amber-200 transition hover:bg-amber-400/20"
+                        >
+                          Start this quest
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 </section>
 
