@@ -94,6 +94,8 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
   const [appState, setAppState] = useState<AppState>(buildDefaultState);
   const [user, setUser] = useState<User | null>(null);
   const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
   const supabaseClient = getSupabaseClient();
 
@@ -191,21 +193,43 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
       <div className="min-h-screen bg-[#0b0b0c] px-4 py-6 text-slate-100">
         <div className="mx-auto max-w-md rounded-3xl border border-white/10 bg-[#111214] p-6 shadow-xl shadow-black/20">
           <p className="text-xs uppercase tracking-[0.38em] text-amber-300">Skate Mastery</p>
-          <h1 className="mt-3 text-3xl font-black text-white">Sign in to save your progression</h1>
+          <h1 className="mt-3 text-3xl font-black text-white">
+            {isCreatingAccount ? "Create your skater account" : "Sign in to save your progression"}
+          </h1>
           <p className="mt-3 text-sm leading-6 text-slate-300">
-            We will email you a secure magic link. No password required.
+            {isCreatingAccount
+              ? "Create an account with email and password. Your progression will sync across devices."
+              : "Use your email and password to access your saved progression."}
           </p>
           <form
             className="mt-6 space-y-3"
             onSubmit={(event) => {
               event.preventDefault();
-              if (!supabaseClient || !authEmail.trim()) return;
+              if (!supabaseClient || !authEmail.trim() || !authPassword) return;
               setAuthMessage("");
-              void supabaseClient.auth
-                .signInWithOtp({ email: authEmail.trim(), options: { emailRedirectTo: window.location.origin } })
-                .then(({ error }) => {
-                  setAuthMessage(error ? error.message : "Check your email for the sign-in link.");
-                });
+              const authRequest = isCreatingAccount
+                ? supabaseClient.auth.signUp({
+                    email: authEmail.trim(),
+                    password: authPassword,
+                  })
+                : supabaseClient.auth.signInWithPassword({
+                    email: authEmail.trim(),
+                    password: authPassword,
+                  });
+
+              void authRequest.then(({ data, error }) => {
+                if (error) {
+                  setAuthMessage(error.message);
+                  return;
+                }
+
+                if (isCreatingAccount && !data.session) {
+                  setAuthMessage("Account created. Check your email if confirmation is enabled, then sign in.");
+                  return;
+                }
+
+                setAuthMessage("Signed in. Loading your progression...");
+              });
             }}
           >
             <input
@@ -216,11 +240,30 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
               placeholder="you@example.com"
               className="w-full rounded-2xl border border-white/10 bg-zinc-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-400"
             />
+            <input
+              type="password"
+              required
+              minLength={6}
+              value={authPassword}
+              onChange={(event) => setAuthPassword(event.target.value)}
+              placeholder="Password (at least 6 characters)"
+              className="w-full rounded-2xl border border-white/10 bg-zinc-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-400"
+            />
             <button className="w-full rounded-2xl bg-amber-400 px-5 py-3 font-bold text-zinc-950 transition hover:bg-amber-300">
-              Email me a sign-in link
+              {isCreatingAccount ? "Create account" : "Sign in"}
             </button>
           </form>
           {authMessage && <p className="mt-4 text-sm text-amber-100">{authMessage}</p>}
+          <button
+            type="button"
+            onClick={() => {
+              setIsCreatingAccount((current) => !current);
+              setAuthMessage("");
+            }}
+            className="mt-5 text-sm font-medium text-slate-300 underline decoration-white/20 underline-offset-4 hover:text-white"
+          >
+            {isCreatingAccount ? "Already have an account? Sign in" : "Need an account? Create one"}
+          </button>
         </div>
       </div>
     );
