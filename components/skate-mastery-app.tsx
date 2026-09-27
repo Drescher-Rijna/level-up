@@ -273,16 +273,26 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
             </button>
           </form>
           {authMessage && <p className="mt-4 text-sm text-amber-100">{authMessage}</p>}
-          <button
-            type="button"
-            onClick={() => {
-              setIsCreatingAccount((current) => !current);
-              setAuthMessage("");
-            }}
-            className="mt-5 text-sm font-medium text-slate-300 underline decoration-white/20 underline-offset-4 hover:text-white"
-          >
-            {isCreatingAccount ? "Already have an account? Sign in" : "Need an account? Create one"}
-          </button>
+          <div className="mt-5 flex flex-col gap-3 text-sm text-slate-300">
+            {!isCreatingAccount && (
+              <Link
+                href="/reset-password"
+                className="font-medium text-amber-200 underline decoration-amber-200/40 underline-offset-4 hover:text-amber-100"
+              >
+                Forgot password?
+              </Link>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setIsCreatingAccount((current) => !current);
+                setAuthMessage("");
+              }}
+              className="text-left font-medium underline decoration-white/20 underline-offset-4 hover:text-white"
+            >
+              {isCreatingAccount ? "Already have an account? Sign in" : "Need an account? Create one"}
+            </button>
+          </div>
         </div>
       </div>
     );
