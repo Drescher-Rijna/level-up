@@ -16,7 +16,40 @@ export type TrainingCheckIn = {
   kneeScore: number;
   energyScore: number;
   co2ToleranceSeconds: number | null;
-  workoutPlan: WorkoutPlan | "rest" | null;
+  workoutPlan?: WorkoutPlan | "rest" | null;
+};
+
+export type WorkoutExerciseDefinition = {
+  id: string;
+  name: string;
+  sets: number;
+  target: number;
+  unit: "reps" | "seconds";
+  tempo: string;
+  note?: string;
+};
+
+export type WorkoutPlanDefinition = {
+  id: WorkoutPlan;
+  name: string;
+  exercises: WorkoutExerciseDefinition[];
+};
+
+export type WorkoutSet = {
+  reps: number;
+  weightKg: number | null;
+  completed: boolean;
+};
+
+export type WorkoutExerciseLog = WorkoutExerciseDefinition & {
+  loggedSets: WorkoutSet[];
+};
+
+export type WorkoutSession = {
+  id: string;
+  plan: WorkoutPlan;
+  completedAt: string;
+  exercises: WorkoutExerciseLog[];
 };
 
 export type AppState = {
@@ -32,4 +65,5 @@ export type AppState = {
   questBonusAwarded: boolean;
   questTemplates: QuestTemplate[];
   trainingCheckIns: TrainingCheckIn[];
+  workoutSessions: WorkoutSession[];
 };

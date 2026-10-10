@@ -19,19 +19,26 @@ import {
   getLevelData,
   getSkatingYear,
 } from "@/lib/game";
-import type { AppState, QuestTemplate, TrainingCheckIn } from "@/lib/state-types";
+import type {
+  AppState,
+  QuestTemplate,
+  TrainingCheckIn,
+  WorkoutSession,
+} from "@/lib/state-types";
 import DailyTrainingCheckIn from "@/components/daily-training-check-in";
+import WorkoutTracker from "@/components/workout-tracker";
 import {
   completeTask,
   ensureUserProfile,
   loadUserState,
   logQuestHours,
   saveTrainingCheckIn,
+  saveWorkoutSession,
   startQuestFromTemplate,
 } from "@/lib/persistence";
 import { getSupabaseClient, getSupabaseConfigurationError } from "@/lib/supabase";
 
-type AppView = "home" | "stats" | "quests" | "settings";
+type AppView = "home" | "stats" | "workouts" | "quests" | "settings";
 
 const DEFAULT_QUEST_TEMPLATES: QuestTemplate[] = [
   { id: "back-seat-weight-distribution", name: "Back seat weight distribution", description: "Keep your weight centered and controlled through the back seat.", targetHours: 100, completionBonusXp: 2000 },
@@ -72,6 +79,7 @@ function buildDefaultState(): AppState {
     questBonusAwarded: false,
     questTemplates: DEFAULT_QUEST_TEMPLATES,
     trainingCheckIns: [],
+    workoutSessions: [],
   };
 }
 
@@ -97,6 +105,7 @@ function readState() {
         ...checkIn,
         co2ToleranceSeconds: checkIn.co2ToleranceSeconds ?? null,
       })),
+      workoutSessions: parsed.workoutSessions ?? [],
     };
   } catch {
     return buildDefaultState();
@@ -126,6 +135,8 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
   const [checkInMessage, setCheckInMessage] = useState("");
   const [focusMessage, setFocusMessage] = useState("");
   const [isSavingCheckIn, setIsSavingCheckIn] = useState(false);
+  const [isSavingWorkout, setIsSavingWorkout] = useState(false);
+  const [workoutMessage, setWorkoutMessage] = useState("");
   const [focusedHours, setFocusedHours] = useState("");
   const supabaseClient = getSupabaseClient();
 
@@ -425,8 +436,13 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
     return true;
   }
 
-  async function saveDailyCheckIn(checkIn: Omit<TrainingCheckIn, "date">) {
-    const entry: TrainingCheckIn = { ...checkIn, date: getCurrentDateKey() };
+  async function saveDailyCheckIn(checkIn: Omit<TrainingCheckIn, "date" | "workoutPlan">) {
+    const date = getCurrentDateKey();
+    const entry: TrainingCheckIn = {
+      ...checkIn,
+      date,
+      workoutPlan: appState.trainingCheckIns.find((existing) => existing.date === date)?.workoutPlan ?? null,
+    };
     setIsSavingCheckIn(true);
     setCheckInMessage("");
 
@@ -446,18 +462,41 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
       ].sort((first, second) => first.date.localeCompare(second.date)),
     }));
 
-    if (entry.workoutPlan && entry.workoutPlan !== "rest" && strengthTask && !appState.completedToday[strengthTask.id]) {
-      const awarded = await awardTaskXp(strengthTask);
-      if (!awarded) {
-        setCheckInMessage("Check-in saved, but workout XP could not be saved. Save again to retry.");
-        setIsSavingCheckIn(false);
-        return;
-      }
-      setCheckInMessage(`Check-in saved. +${strengthTask.xp} Strength XP earned.`);
-    } else {
-      setCheckInMessage("Check-in saved.");
-    }
+    setCheckInMessage("Check-in saved.");
     setIsSavingCheckIn(false);
+  }
+
+  async function completeWorkout(session: WorkoutSession) {
+    setIsSavingWorkout(true);
+    setWorkoutMessage("");
+    try {
+      if (authenticatedUser) {
+        await saveWorkoutSession(authenticatedUser, session);
+      }
+    } catch (error) {
+      setWorkoutMessage(`Could not save workout: ${(error as Error).message}`);
+      setIsSavingWorkout(false);
+      return { saved: false, message: `Could not save workout: ${(error as Error).message}` };
+    }
+
+    setAppState((current) => ({
+      ...current,
+      workoutSessions: [
+        session,
+        ...current.workoutSessions.filter((existing) => existing.id !== session.id),
+      ].sort((first, second) => second.completedAt.localeCompare(first.completedAt)),
+    }));
+
+    let message = "Workout saved.";
+    if (strengthTask) {
+      const awarded = await awardTaskXp(strengthTask);
+      message = awarded
+        ? `Workout saved. +${strengthTask.xp} Strength XP earned.`
+        : "Workout saved, but Strength XP could not be recorded. Retry by logging Strength from Home.";
+    }
+    setWorkoutMessage(message);
+    setIsSavingWorkout(false);
+    return { saved: true, message };
   }
 
   async function startQuest(template: QuestTemplate) {
@@ -484,6 +523,7 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
   const navItems = [
     { label: "Home", href: "/", active: view === "home" },
     { label: "Stats", href: "/stats", active: view === "stats" },
+    { label: "Workouts", href: "/workouts", active: view === "workouts" },
     { label: "Quests", href: "/quests", active: view === "quests" },
     { label: "Settings", href: "/settings", active: view === "settings" },
   ];
@@ -682,10 +722,8 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
             <h2 className="text-2xl font-black tracking-tight text-white">Stats</h2>
 
             <DailyTrainingCheckIn
-              key={`${today}-${todayCheckIn?.kneeScore ?? "empty"}-${todayCheckIn?.energyScore ?? "empty"}-${todayCheckIn?.workoutPlan ?? "empty"}`}
+              key={`${today}-${todayCheckIn?.kneeScore ?? "empty"}-${todayCheckIn?.energyScore ?? "empty"}`}
               checkIn={todayCheckIn}
-              strengthXp={strengthTask?.xp ?? 0}
-              strengthXpAlreadyEarned={Boolean(strengthTask && appState.completedToday[strengthTask.id])}
               kneeRecoveryFlag={kneeRecoveryFlag}
               saving={isSavingCheckIn}
               statusMessage={checkInMessage}
@@ -779,6 +817,17 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
               </div>
             </section>
           </main>
+        )}
+
+        {view === "workouts" && (
+          <WorkoutTracker
+            sessions={appState.workoutSessions}
+            saving={isSavingWorkout}
+            strengthXp={strengthTask?.xp ?? 0}
+            strengthXpAlreadyEarned={Boolean(strengthTask && appState.completedToday[strengthTask.id])}
+            statusMessage={workoutMessage}
+            onComplete={completeWorkout}
+          />
         )}
 
         {view === "quests" && (

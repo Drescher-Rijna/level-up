@@ -4,7 +4,12 @@ import {
   DEFAULT_TASKS,
   DEFAULT_USER_PROFILE,
 } from "@/lib/game";
-import type { AppState, QuestTemplate, TrainingCheckIn } from "@/lib/state-types";
+import type {
+  AppState,
+  QuestTemplate,
+  TrainingCheckIn,
+  WorkoutSession,
+} from "@/lib/state-types";
 import type { StatKey, Task } from "@/lib/game";
 import { getCurrentDateKey } from "@/lib/game";
 import { supabase } from "@/lib/supabase";
@@ -23,10 +28,11 @@ export async function loadUserState(user: User): Promise<Partial<AppState>> {
       supabase.from("skate_sessions").select("hours").eq("user_id", user.id),
       supabase.from("quest_templates").select("id, name, description, target_hours, completion_bonus_xp").eq("active", true).order("sort_order"),
       supabase.from("training_check_ins").select("check_in_date, knee_score, energy_score, co2_tolerance_seconds, workout_plan").eq("user_id", user.id).order("check_in_date"),
+      supabase.from("workout_sessions").select("id, plan, completed_at, exercises").eq("user_id", user.id).order("completed_at", { ascending: false }),
     ]);
 
-  const [profileResult, tasksResult, completionsResult, questResult, sessionsResult, questTemplatesResult, checkInsResult] = results;
-  const firstError = [profileResult, tasksResult, completionsResult, questResult, sessionsResult, questTemplatesResult, checkInsResult].find(
+  const [profileResult, tasksResult, completionsResult, questResult, sessionsResult, questTemplatesResult, checkInsResult, workoutSessionsResult] = results;
+  const firstError = [profileResult, tasksResult, completionsResult, questResult, sessionsResult, questTemplatesResult, checkInsResult, workoutSessionsResult].find(
     (result) => result.error,
   );
   if (firstError?.error) {
@@ -117,6 +123,12 @@ export async function loadUserState(user: User): Promise<Partial<AppState>> {
       co2ToleranceSeconds: checkIn.co2_tolerance_seconds,
       workoutPlan: checkIn.workout_plan,
     })),
+    workoutSessions: (workoutSessionsResult.data ?? []).map((session): WorkoutSession => ({
+      id: session.id,
+      plan: session.plan,
+      completedAt: session.completed_at,
+      exercises: session.exercises,
+    })),
   };
 }
 
@@ -160,6 +172,21 @@ export async function saveTrainingCheckIn(
       workout_plan: checkIn.workoutPlan,
     },
     { onConflict: "user_id,check_in_date" },
+  );
+  if (error) throw new Error(error.message);
+}
+
+export async function saveWorkoutSession(user: User, session: WorkoutSession) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const { error } = await supabase.from("workout_sessions").upsert(
+    {
+      id: session.id,
+      user_id: user.id,
+      plan: session.plan,
+      completed_at: session.completedAt,
+      exercises: session.exercises,
+    },
+    { onConflict: "id" },
   );
   if (error) throw new Error(error.message);
 }

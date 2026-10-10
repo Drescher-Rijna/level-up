@@ -1,13 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { TrainingCheckIn, WorkoutPlan } from "@/lib/state-types";
-
-const WORKOUT_PLANS: { id: WorkoutPlan; name: string }[] = [
-  { id: "1", name: "Deadlift + split squat" },
-  { id: "2", name: "Single-leg RDL + press" },
-  { id: "3", name: "Squat + Nordic curls" },
-];
+import type { TrainingCheckIn } from "@/lib/state-types";
 
 function getCo2Band(seconds: number) {
   if (seconds < 30) return "Needs attention";
@@ -58,8 +52,6 @@ function ScorePicker({
 
 export default function DailyTrainingCheckIn({
   checkIn,
-  strengthXp,
-  strengthXpAlreadyEarned,
   kneeRecoveryFlag,
   saving,
   statusMessage,
@@ -67,13 +59,11 @@ export default function DailyTrainingCheckIn({
   onSave,
 }: {
   checkIn?: TrainingCheckIn;
-  strengthXp: number;
-  strengthXpAlreadyEarned: boolean;
   kneeRecoveryFlag: boolean;
   saving: boolean;
   statusMessage: string;
   weeklySummary: { days: number; knee: number; energy: number; co2Average: number | null } | null;
-  onSave: (checkIn: Omit<TrainingCheckIn, "date">) => Promise<void>;
+  onSave: (checkIn: Omit<TrainingCheckIn, "date" | "workoutPlan">) => Promise<void>;
 }) {
   const [kneeScore, setKneeScore] = useState<number | null>(checkIn?.kneeScore ?? null);
   const [energyScore, setEnergyScore] = useState<number | null>(checkIn?.energyScore ?? null);
@@ -86,10 +76,6 @@ export default function DailyTrainingCheckIn({
   const invalidCo2Seconds =
     parsedCo2Seconds !== null &&
     (!Number.isInteger(parsedCo2Seconds) || parsedCo2Seconds < 1);
-  const [workoutPlan, setWorkoutPlan] = useState<TrainingCheckIn["workoutPlan"]>(
-    checkIn?.workoutPlan ?? null,
-  );
-
   return (
     <section className="rounded-3xl border border-white/10 bg-[#111214] p-5 shadow-xl shadow-black/20">
       <div>
@@ -163,44 +149,6 @@ export default function DailyTrainingCheckIn({
         </p>
       </div>
 
-      <fieldset className="mt-5">
-        <legend className="text-sm font-semibold text-white">Workout completed today?</legend>
-        <div className="mt-2 grid gap-2 sm:grid-cols-2">
-          {WORKOUT_PLANS.map((plan) => (
-            <button
-              key={plan.id}
-              type="button"
-              aria-pressed={workoutPlan === plan.id}
-              onClick={() => setWorkoutPlan(plan.id)}
-              className={`rounded-xl border px-3 py-2 text-left text-sm transition ${
-                workoutPlan === plan.id
-                  ? "border-amber-300/70 bg-amber-300/10 text-amber-100"
-                  : "border-white/10 bg-black/20 text-slate-300 hover:border-white/30"
-              }`}
-            >
-              <span className="font-bold">Plan {plan.id}</span>
-              <span className="ml-2">{plan.name}</span>
-            </button>
-          ))}
-          <button
-            type="button"
-            aria-pressed={workoutPlan === "rest"}
-            onClick={() => setWorkoutPlan("rest")}
-            className={`rounded-xl border px-3 py-2 text-left text-sm transition ${
-              workoutPlan === "rest"
-                ? "border-amber-300/70 bg-amber-300/10 text-amber-100"
-                : "border-white/10 bg-black/20 text-slate-300 hover:border-white/30"
-            }`}
-          >
-            Rest day
-          </button>
-        </div>
-        <p className="mt-2 text-xs text-slate-400">
-          Select a plan only after completing it. Keep sets and reps in Strong or Hevy. A completed plan earns your existing Strength XP once per day.
-          {strengthXpAlreadyEarned ? " Strength XP is already earned today." : ` (+${strengthXp} XP)`}
-        </p>
-      </fieldset>
-
       <div className="mt-5 flex flex-wrap items-center gap-3">
         <button
           type="button"
@@ -211,7 +159,6 @@ export default function DailyTrainingCheckIn({
                 kneeScore,
                 energyScore,
                 co2ToleranceSeconds: parsedCo2Seconds,
-                workoutPlan,
               });
             }
           }}

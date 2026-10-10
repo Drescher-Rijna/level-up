@@ -62,6 +62,15 @@ create table if not exists public.training_check_ins (
 alter table public.training_check_ins
   add column if not exists co2_tolerance_seconds integer check (co2_tolerance_seconds >= 0);
 
+create table if not exists public.workout_sessions (
+  id uuid primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  plan text not null check (plan in ('1', '2', '3')),
+  completed_at timestamptz not null default now(),
+  exercises jsonb not null check (jsonb_typeof(exercises) = 'array'),
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.quest_templates (
   id text primary key,
   name text not null,
@@ -107,6 +116,7 @@ alter table public.daily_completions enable row level security;
 alter table public.quests enable row level security;
 alter table public.skate_sessions enable row level security;
 alter table public.training_check_ins enable row level security;
+alter table public.workout_sessions enable row level security;
 alter table public.quest_templates enable row level security;
 
 drop policy if exists "Users can view their profile" on public.profiles;
@@ -142,6 +152,13 @@ drop policy if exists "Users can create their training check-ins" on public.trai
 create policy "Users can create their training check-ins" on public.training_check_ins for insert with check (auth.uid() = user_id);
 drop policy if exists "Users can update their training check-ins" on public.training_check_ins;
 create policy "Users can update their training check-ins" on public.training_check_ins for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "Users can view their workout sessions" on public.workout_sessions;
+create policy "Users can view their workout sessions" on public.workout_sessions for select using (auth.uid() = user_id);
+drop policy if exists "Users can create their workout sessions" on public.workout_sessions;
+create policy "Users can create their workout sessions" on public.workout_sessions for insert with check (auth.uid() = user_id);
+drop policy if exists "Users can update their workout sessions" on public.workout_sessions;
+create policy "Users can update their workout sessions" on public.workout_sessions for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 drop policy if exists "Anyone can view active quest templates" on public.quest_templates;
 create policy "Anyone can view active quest templates" on public.quest_templates for select using (active = true);
