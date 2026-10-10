@@ -48,6 +48,16 @@ create table if not exists public.skate_sessions (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.training_check_ins (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  check_in_date date not null default current_date,
+  knee_score integer not null check (knee_score between 1 and 5),
+  energy_score integer not null check (energy_score between 1 and 5),
+  workout_plan text check (workout_plan in ('1', '2', '3', 'rest')),
+  created_at timestamptz not null default now(),
+  primary key (user_id, check_in_date)
+);
+
 create table if not exists public.quest_templates (
   id text primary key,
   name text not null,
@@ -92,6 +102,7 @@ alter table public.tasks enable row level security;
 alter table public.daily_completions enable row level security;
 alter table public.quests enable row level security;
 alter table public.skate_sessions enable row level security;
+alter table public.training_check_ins enable row level security;
 alter table public.quest_templates enable row level security;
 
 drop policy if exists "Users can view their profile" on public.profiles;
@@ -120,6 +131,13 @@ drop policy if exists "Users can view their skate sessions" on public.skate_sess
 create policy "Users can view their skate sessions" on public.skate_sessions for select using (auth.uid() = user_id);
 drop policy if exists "Users can create their skate sessions" on public.skate_sessions;
 create policy "Users can create their skate sessions" on public.skate_sessions for insert with check (auth.uid() = user_id);
+
+drop policy if exists "Users can view their training check-ins" on public.training_check_ins;
+create policy "Users can view their training check-ins" on public.training_check_ins for select using (auth.uid() = user_id);
+drop policy if exists "Users can create their training check-ins" on public.training_check_ins;
+create policy "Users can create their training check-ins" on public.training_check_ins for insert with check (auth.uid() = user_id);
+drop policy if exists "Users can update their training check-ins" on public.training_check_ins;
+create policy "Users can update their training check-ins" on public.training_check_ins for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 drop policy if exists "Anyone can view active quest templates" on public.quest_templates;
 create policy "Anyone can view active quest templates" on public.quest_templates for select using (active = true);

@@ -19,12 +19,14 @@ import {
   getLevelData,
   getSkatingYear,
 } from "@/lib/game";
-import type { AppState, QuestTemplate } from "@/lib/state-types";
+import type { AppState, QuestTemplate, TrainingCheckIn } from "@/lib/state-types";
+import DailyTrainingCheckIn from "@/components/daily-training-check-in";
 import {
   completeTask,
   ensureUserProfile,
   loadUserState,
   logQuestHours,
+  saveTrainingCheckIn,
   startQuestFromTemplate,
 } from "@/lib/persistence";
 import { getSupabaseClient, getSupabaseConfigurationError } from "@/lib/supabase";
@@ -69,6 +71,7 @@ function buildDefaultState(): AppState {
     totalSkateHours: DEFAULT_TOTAL_SKATE_HOURS,
     questBonusAwarded: false,
     questTemplates: DEFAULT_QUEST_TEMPLATES,
+    trainingCheckIns: [],
   };
 }
 
@@ -90,6 +93,7 @@ function readState() {
       statXp: { ...DEFAULT_STAT_XP, ...(parsed.statXp ?? {}) },
       tasks: parsed.tasks ?? DEFAULT_TASKS,
       questTemplates: parsed.questTemplates ?? DEFAULT_QUEST_TEMPLATES,
+      trainingCheckIns: parsed.trainingCheckIns ?? [],
     };
   } catch {
     return buildDefaultState();
@@ -116,6 +120,10 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
   const [remoteStateError, setRemoteStateError] = useState("");
+  const [checkInMessage, setCheckInMessage] = useState("");
+  const [focusMessage, setFocusMessage] = useState("");
+  const [isSavingCheckIn, setIsSavingCheckIn] = useState(false);
+  const [focusedHours, setFocusedHours] = useState("");
   const supabaseClient = getSupabaseClient();
 
   useEffect(() => {
@@ -182,6 +190,32 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
     () => getSkatingYear(appState.skatingStartDate),
     [appState.skatingStartDate],
   );
+
+  const today = getCurrentDateKey();
+  const yesterdayDate = new Date();
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterday = getCurrentDateKey(yesterdayDate);
+  const checkInsByDate = new Map(appState.trainingCheckIns.map((checkIn) => [checkIn.date, checkIn]));
+  const todayCheckIn = checkInsByDate.get(today);
+  const kneeRecoveryFlag = Boolean(
+    todayCheckIn &&
+    todayCheckIn.kneeScore <= 2 &&
+    (checkInsByDate.get(yesterday)?.kneeScore ?? 5) <= 2,
+  );
+  const lastSevenDates = Array.from({ length: 7 }, (_, daysAgo) => {
+    const date = new Date();
+    date.setDate(date.getDate() - daysAgo);
+    return getCurrentDateKey(date);
+  });
+  const weeklyCheckIns = appState.trainingCheckIns.filter((checkIn) => lastSevenDates.includes(checkIn.date));
+  const weeklyCheckInSummary = weeklyCheckIns.length
+    ? {
+        days: weeklyCheckIns.length,
+        knee: weeklyCheckIns.reduce((total, checkIn) => total + checkIn.kneeScore, 0) / weeklyCheckIns.length,
+        energy: weeklyCheckIns.reduce((total, checkIn) => total + checkIn.energyScore, 0) / weeklyCheckIns.length,
+      }
+    : null;
+  const strengthTask = appState.tasks.find((task) => task.id === "strength");
 
   if (!mounted) {
     return (
@@ -318,11 +352,15 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
   const statEntries = Object.entries(STAT_META) as [StatKey, (typeof STAT_META)[StatKey]][];
 
   async function awardTaskXp(task: Task) {
+    if (appState.completedToday[task.id]) {
+      return true;
+    }
+
     try {
       await completeTask(authenticatedUser, task.id, getCurrentDateKey());
     } catch (error) {
       setAuthMessage(`Could not save task completion: ${(error as Error).message}`);
-      return;
+      return false;
     }
 
     setAppState((current) => {
@@ -342,14 +380,15 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
         completedDates: nextCompletedDates,
       };
     });
+    return true;
   }
 
   async function updateQuestHours(hoursToAdd: number) {
     try {
       await logQuestHours(authenticatedUser, appState.quest.id, hoursToAdd);
     } catch (error) {
-      setAuthMessage(`Could not save quest hours: ${(error as Error).message}`);
-      return;
+      setFocusMessage(`Could not save focused hours: ${(error as Error).message}`);
+      return false;
     }
 
     setAppState((current) => {
@@ -369,9 +408,45 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
         totalXp: nextTotalXp,
         quest: nextQuest,
         questBonusAwarded: nextQuestBonusAwarded,
-        totalSkateHours: Number((current.totalSkateHours + hoursToAdd).toFixed(1)),
       };
     });
+    setFocusMessage("");
+    return true;
+  }
+
+  async function saveDailyCheckIn(checkIn: Omit<TrainingCheckIn, "date">) {
+    const entry: TrainingCheckIn = { ...checkIn, date: getCurrentDateKey() };
+    setIsSavingCheckIn(true);
+    setCheckInMessage("");
+
+    try {
+      await saveTrainingCheckIn(authenticatedUser, entry);
+    } catch (error) {
+      setCheckInMessage(`Could not save check-in: ${(error as Error).message}`);
+      setIsSavingCheckIn(false);
+      return;
+    }
+
+    setAppState((current) => ({
+      ...current,
+      trainingCheckIns: [
+        ...current.trainingCheckIns.filter((checkIn) => checkIn.date !== entry.date),
+        entry,
+      ].sort((first, second) => first.date.localeCompare(second.date)),
+    }));
+
+    if (entry.workoutPlan && entry.workoutPlan !== "rest" && strengthTask && !appState.completedToday[strengthTask.id]) {
+      const awarded = await awardTaskXp(strengthTask);
+      if (!awarded) {
+        setCheckInMessage("Check-in saved, but workout XP could not be saved. Save again to retry.");
+        setIsSavingCheckIn(false);
+        return;
+      }
+      setCheckInMessage(`Check-in saved. +${strengthTask.xp} Strength XP earned.`);
+    } else {
+      setCheckInMessage("Check-in saved.");
+    }
+    setIsSavingCheckIn(false);
   }
 
   async function startQuest(template: QuestTemplate) {
@@ -593,8 +668,72 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
 
         {view === "stats" && (
           <main className="space-y-6">
+            <h2 className="text-2xl font-black tracking-tight text-white">Stats</h2>
+
+            <DailyTrainingCheckIn
+              key={`${today}-${todayCheckIn?.kneeScore ?? "empty"}-${todayCheckIn?.energyScore ?? "empty"}-${todayCheckIn?.workoutPlan ?? "empty"}`}
+              checkIn={todayCheckIn}
+              strengthXp={strengthTask?.xp ?? 0}
+              strengthXpAlreadyEarned={Boolean(strengthTask && appState.completedToday[strengthTask.id])}
+              kneeRecoveryFlag={kneeRecoveryFlag}
+              saving={isSavingCheckIn}
+              statusMessage={checkInMessage}
+              weeklySummary={weeklyCheckInSummary}
+              onSave={saveDailyCheckIn}
+            />
+
             <section className="rounded-3xl border border-white/10 bg-[#111214] p-5 shadow-xl shadow-black/20">
-              <h2 className="text-2xl font-black tracking-tight text-white">Stats</h2>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.3em] text-amber-300">100-hour focus</p>
+                  <h2 className="mt-2 text-xl font-bold text-white">{appState.quest.name}</h2>
+                  <p className="mt-1 text-sm text-slate-300">Log only deliberate practice on this principle, separate from total skate time.</p>
+                </div>
+                <p className="shrink-0 text-sm font-semibold text-amber-200">
+                  {appState.quest.completedHours} / {appState.quest.targetHours} focused hours
+                </p>
+              </div>
+              <div className="mt-4">
+                <ProgressBar percent={(appState.quest.completedHours / appState.quest.targetHours) * 100} />
+              </div>
+              <form
+                className="mt-4 flex flex-col gap-3 sm:flex-row"
+                onSubmit={async (event) => {
+                  event.preventDefault();
+                  const value = Number(focusedHours);
+                  if (!Number.isFinite(value) || value <= 0) {
+                    setFocusMessage("Enter focused hours greater than zero.");
+                    return;
+                  }
+                  if (await updateQuestHours(value)) {
+                    setFocusedHours("");
+                  }
+                }}
+              >
+                <input
+                  type="number"
+                  min={0.1}
+                  step="0.1"
+                  value={focusedHours}
+                  onChange={(event) => setFocusedHours(event.target.value)}
+                  placeholder="e.g. 1.5 focused hours"
+                  aria-label="Focused skate practice hours"
+                  disabled={appState.quest.status === "completed"}
+                  className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-amber-400 disabled:opacity-50"
+                />
+                <button
+                  type="submit"
+                  disabled={appState.quest.status === "completed"}
+                  className="rounded-xl bg-amber-400 px-5 py-3 font-bold text-zinc-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Log focus
+                </button>
+              </form>
+              {focusMessage && <p role="status" className="mt-3 text-sm text-slate-300">{focusMessage}</p>}
+            </section>
+
+            <section className="rounded-3xl border border-white/10 bg-[#111214] p-5 shadow-xl shadow-black/20">
+              <h2 className="text-2xl font-black tracking-tight text-white">Level progression</h2>
               <div className="mt-5 space-y-5">
                 {statEntries.map(([key, meta]) => {
                   const statXp = appState.statXp[key];
@@ -647,7 +786,7 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
                 <p className="mt-2 text-slate-300">{appState.quest.description}</p>
                 <div className="mt-4">
                   <div className="mb-2 flex items-center justify-between text-sm text-slate-300">
-                    <span>{appState.quest.completedHours} / {appState.quest.targetHours} hours</span>
+                    <span>{appState.quest.completedHours} / {appState.quest.targetHours} focused hours</span>
                     <span>{Math.round((appState.quest.completedHours / appState.quest.targetHours) * 100)}%</span>
                   </div>
                   <ProgressBar percent={(appState.quest.completedHours / appState.quest.targetHours) * 100} />
@@ -657,7 +796,7 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
                     type="number"
                     min={0.1}
                     step="0.1"
-                    placeholder="1.5 hours"
+                    placeholder="1.5 focused hours"
                     className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-amber-400"
                     id="quest-hours"
                   />
@@ -676,7 +815,7 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
                     }}
                     className="rounded-xl bg-amber-400 px-5 py-3 font-bold text-zinc-950 transition hover:bg-amber-300"
                   >
-                    Log hours
+                    Log focused hours
                   </button>
                 </div>
 

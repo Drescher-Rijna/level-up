@@ -9,6 +9,15 @@ export type QuestTemplate = {
   completionBonusXp: number;
 };
 
+export type WorkoutPlan = "1" | "2" | "3";
+
+export type TrainingCheckIn = {
+  date: string;
+  kneeScore: number;
+  energyScore: number;
+  workoutPlan: WorkoutPlan | "rest" | null;
+};
+
 export type AppState = {
   displayName: string;
   skatingStartDate: string;
@@ -21,4 +30,5 @@ export type AppState = {
   totalSkateHours: number;
   questBonusAwarded: boolean;
   questTemplates: QuestTemplate[];
+  trainingCheckIns: TrainingCheckIn[];
 };
