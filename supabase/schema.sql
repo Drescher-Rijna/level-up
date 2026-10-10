@@ -53,10 +53,14 @@ create table if not exists public.training_check_ins (
   check_in_date date not null default current_date,
   knee_score integer not null check (knee_score between 1 and 5),
   energy_score integer not null check (energy_score between 1 and 5),
+  co2_tolerance_seconds integer check (co2_tolerance_seconds >= 0),
   workout_plan text check (workout_plan in ('1', '2', '3', 'rest')),
   created_at timestamptz not null default now(),
   primary key (user_id, check_in_date)
 );
+
+alter table public.training_check_ins
+  add column if not exists co2_tolerance_seconds integer check (co2_tolerance_seconds >= 0);
 
 create table if not exists public.quest_templates (
   id text primary key,

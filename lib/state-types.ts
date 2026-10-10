@@ -15,6 +15,7 @@ export type TrainingCheckIn = {
   date: string;
   kneeScore: number;
   energyScore: number;
+  co2ToleranceSeconds: number | null;
   workoutPlan: WorkoutPlan | "rest" | null;
 };
 

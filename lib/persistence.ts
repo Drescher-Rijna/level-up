@@ -22,7 +22,7 @@ export async function loadUserState(user: User): Promise<Partial<AppState>> {
       supabase.from("quests").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
       supabase.from("skate_sessions").select("hours").eq("user_id", user.id),
       supabase.from("quest_templates").select("id, name, description, target_hours, completion_bonus_xp").eq("active", true).order("sort_order"),
-      supabase.from("training_check_ins").select("check_in_date, knee_score, energy_score, workout_plan").eq("user_id", user.id).order("check_in_date"),
+      supabase.from("training_check_ins").select("check_in_date, knee_score, energy_score, co2_tolerance_seconds, workout_plan").eq("user_id", user.id).order("check_in_date"),
     ]);
 
   const [profileResult, tasksResult, completionsResult, questResult, sessionsResult, questTemplatesResult, checkInsResult] = results;
@@ -114,6 +114,7 @@ export async function loadUserState(user: User): Promise<Partial<AppState>> {
       date: checkIn.check_in_date,
       kneeScore: checkIn.knee_score,
       energyScore: checkIn.energy_score,
+      co2ToleranceSeconds: checkIn.co2_tolerance_seconds,
       workoutPlan: checkIn.workout_plan,
     })),
   };
@@ -155,6 +156,7 @@ export async function saveTrainingCheckIn(
       check_in_date: checkIn.date,
       knee_score: checkIn.kneeScore,
       energy_score: checkIn.energyScore,
+      co2_tolerance_seconds: checkIn.co2ToleranceSeconds,
       workout_plan: checkIn.workoutPlan,
     },
     { onConflict: "user_id,check_in_date" },

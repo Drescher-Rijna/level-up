@@ -22,7 +22,7 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 ## Supabase schema
 
-Apply [`supabase/schema.sql`](./supabase/schema.sql) in the Supabase SQL Editor when setting up or updating the database. Existing deployments need to run it again to create the daily training check-in table and policies.
+Apply [`supabase/schema.sql`](./supabase/schema.sql) in the Supabase SQL Editor when setting up or updating the database. Existing deployments should re-run it after app updates; it idempotently adds the daily check-in table, policies, and new check-in fields.
 
 ## Learn More
 

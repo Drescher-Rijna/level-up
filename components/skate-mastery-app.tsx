@@ -93,7 +93,10 @@ function readState() {
       statXp: { ...DEFAULT_STAT_XP, ...(parsed.statXp ?? {}) },
       tasks: parsed.tasks ?? DEFAULT_TASKS,
       questTemplates: parsed.questTemplates ?? DEFAULT_QUEST_TEMPLATES,
-      trainingCheckIns: parsed.trainingCheckIns ?? [],
+      trainingCheckIns: (parsed.trainingCheckIns ?? []).map((checkIn) => ({
+        ...checkIn,
+        co2ToleranceSeconds: checkIn.co2ToleranceSeconds ?? null,
+      })),
     };
   } catch {
     return buildDefaultState();
@@ -213,6 +216,14 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
         days: weeklyCheckIns.length,
         knee: weeklyCheckIns.reduce((total, checkIn) => total + checkIn.kneeScore, 0) / weeklyCheckIns.length,
         energy: weeklyCheckIns.reduce((total, checkIn) => total + checkIn.energyScore, 0) / weeklyCheckIns.length,
+        co2Average: (() => {
+          const co2Scores = weeklyCheckIns
+            .map((checkIn) => checkIn.co2ToleranceSeconds)
+            .filter((seconds): seconds is number => seconds !== null);
+          return co2Scores.length
+            ? co2Scores.reduce((total, seconds) => total + seconds, 0) / co2Scores.length
+            : null;
+        })(),
       }
     : null;
   const strengthTask = appState.tasks.find((task) => task.id === "strength");

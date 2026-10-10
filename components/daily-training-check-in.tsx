@@ -9,6 +9,12 @@ const WORKOUT_PLANS: { id: WorkoutPlan; name: string }[] = [
   { id: "3", name: "Squat + Nordic curls" },
 ];
 
+function getCo2Band(seconds: number) {
+  if (seconds < 30) return "Needs attention";
+  if (seconds <= 60) return "Moderate";
+  return "Great";
+}
+
 function ScorePicker({
   label,
   lowLabel,
@@ -66,11 +72,20 @@ export default function DailyTrainingCheckIn({
   kneeRecoveryFlag: boolean;
   saving: boolean;
   statusMessage: string;
-  weeklySummary: { days: number; knee: number; energy: number } | null;
+  weeklySummary: { days: number; knee: number; energy: number; co2Average: number | null } | null;
   onSave: (checkIn: Omit<TrainingCheckIn, "date">) => Promise<void>;
 }) {
   const [kneeScore, setKneeScore] = useState<number | null>(checkIn?.kneeScore ?? null);
   const [energyScore, setEnergyScore] = useState<number | null>(checkIn?.energyScore ?? null);
+  const [co2Seconds, setCo2Seconds] = useState(
+    checkIn?.co2ToleranceSeconds === null || checkIn?.co2ToleranceSeconds === undefined
+      ? ""
+      : String(checkIn.co2ToleranceSeconds),
+  );
+  const parsedCo2Seconds = co2Seconds.trim() ? Number(co2Seconds) : null;
+  const invalidCo2Seconds =
+    parsedCo2Seconds !== null &&
+    (!Number.isInteger(parsedCo2Seconds) || parsedCo2Seconds < 1);
   const [workoutPlan, setWorkoutPlan] = useState<TrainingCheckIn["workoutPlan"]>(
     checkIn?.workoutPlan ?? null,
   );
@@ -92,6 +107,9 @@ export default function DailyTrainingCheckIn({
       {weeklySummary && (
         <p className="mt-3 text-sm text-slate-300">
           Last 7 days: knee {weeklySummary.knee.toFixed(1)}/5 · energy {weeklySummary.energy.toFixed(1)}/5 · {weeklySummary.days}/7 mornings logged
+          {weeklySummary.co2Average !== null && (
+            <> · breath-hold check average {weeklySummary.co2Average.toFixed(0)}s ({getCo2Band(weeklySummary.co2Average)})</>
+          )}
         </p>
       )}
 
@@ -110,6 +128,39 @@ export default function DailyTrainingCheckIn({
           value={energyScore}
           onChange={setEnergyScore}
         />
+      </div>
+
+      <div className="mt-5">
+        <label htmlFor="co2-tolerance-seconds" className="text-sm font-semibold text-white">
+          Optional comfortable breath-hold check
+        </label>
+        <div className="mt-2 flex items-center gap-3">
+          <input
+            id="co2-tolerance-seconds"
+            type="number"
+            min={1}
+            step={1}
+            value={co2Seconds}
+            onChange={(event) => setCo2Seconds(event.target.value)}
+            placeholder="Seconds"
+            className="w-32 rounded-xl border border-white/10 bg-zinc-950 px-4 py-2.5 text-white outline-none placeholder:text-slate-500 focus:border-amber-400"
+          />
+          <span className="text-sm text-slate-400">seconds</span>
+          {parsedCo2Seconds !== null && !invalidCo2Seconds && (
+            <span className="text-sm font-semibold text-amber-200">
+              {getCo2Band(parsedCo2Seconds)}
+            </span>
+          )}
+        </div>
+        {invalidCo2Seconds && (
+          <p className="mt-1 text-xs text-rose-200" role="alert">
+            Enter a whole number of seconds greater than zero, or leave this optional check blank.
+          </p>
+        )}
+        <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-400">
+          Optional rough trend only, not a medical or direct CO₂ measurement. If you choose to log one, stop at the first clear urge to breathe—don’t push for a maximum or hyperventilate. Do it seated, never in water or while driving.
+          <span className="mt-1 block">Under 30s: needs attention · 30–60s: moderate · over 60s: great. No XP is awarded.</span>
+        </p>
       </div>
 
       <fieldset className="mt-5">
@@ -153,10 +204,15 @@ export default function DailyTrainingCheckIn({
       <div className="mt-5 flex flex-wrap items-center gap-3">
         <button
           type="button"
-          disabled={saving || kneeScore === null || energyScore === null}
+          disabled={saving || kneeScore === null || energyScore === null || invalidCo2Seconds}
           onClick={() => {
             if (kneeScore !== null && energyScore !== null) {
-              void onSave({ kneeScore, energyScore, workoutPlan });
+              void onSave({
+                kneeScore,
+                energyScore,
+                co2ToleranceSeconds: parsedCo2Seconds,
+                workoutPlan,
+              });
             }
           }}
           className="rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-bold text-zinc-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
