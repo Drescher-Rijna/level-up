@@ -114,9 +114,9 @@ function readState() {
 
 function ProgressBar({ percent }: { percent: number }) {
   return (
-    <div className="h-2.5 w-full overflow-hidden rounded-full bg-white/10">
+    <div className="app-progress">
       <div
-        className="h-full rounded-full bg-gradient-to-r from-amber-300 via-orange-400 to-red-500 transition-all duration-500"
+        className="app-progress-fill"
         style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
       />
     </div>
@@ -220,6 +220,17 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
     const date = new Date();
     date.setDate(date.getDate() - daysAgo);
     return getCurrentDateKey(date);
+  });
+  const weekDays = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date();
+    date.setDate(date.getDate() - (6 - index));
+    const dateKey = getCurrentDateKey(date);
+    return {
+      key: dateKey,
+      label: new Intl.DateTimeFormat("en", { weekday: "short" }).format(date).slice(0, 2),
+      completed: appState.completedDates.includes(dateKey),
+      isToday: dateKey === today,
+    };
   });
   const weeklyCheckIns = appState.trainingCheckIns.filter((checkIn) => lastSevenDates.includes(checkIn.date));
   const weeklyCheckInSummary = weeklyCheckIns.length
@@ -521,80 +532,74 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
   }
 
   const navItems = [
-    { label: "Home", href: "/", active: view === "home" },
-    { label: "Stats", href: "/stats", active: view === "stats" },
-    { label: "Workouts", href: "/workouts", active: view === "workouts" },
-    { label: "Quests", href: "/quests", active: view === "quests" },
-    { label: "Settings", href: "/settings", active: view === "settings" },
+    { label: "Today", href: "/", active: view === "home", icon: <path d="m4 11 8-7 8 7v9h-5v-6H9v6H4z" /> },
+    { label: "Train", href: "/workouts", active: view === "workouts", icon: <path d="M6 7v10M18 7v10M3 10v4M21 10v4M6 12h12" /> },
+    { label: "Quests", href: "/quests", active: view === "quests", icon: <path d="M5 21V4h12l-2.5 4 2.5 4H5" /> },
+    { label: "Me", href: "/settings", active: view === "settings", icon: <><circle cx="12" cy="8" r="4" /><path d="M4 21c1-4 4-6 8-6s7 2 8 6" /></> },
   ];
 
   return (
-    <div className="min-h-screen bg-[#0b0b0c] text-slate-100">
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
-        <header className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-4 shadow-2xl shadow-black/20 backdrop-blur-sm">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.38em] text-amber-300">Skate Mastery</p>
-              <h1 className="mt-2 text-3xl font-black tracking-tight text-white sm:text-4xl">
-                {appState.displayName}
-              </h1>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {navItems.map((item) => (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
-                    item.active
-                      ? "border-amber-400/70 bg-amber-400/15 text-amber-200"
-                      : "border-white/10 bg-black/20 text-slate-300 hover:border-white/20 hover:text-white"
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </div>
-          </div>
-        </header>
+    <div className="sm-app min-h-screen text-slate-100">
+      <div className="app-content mx-auto">
 
         {view === "home" && (
-          <main className="space-y-6">
-            <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-zinc-900 via-zinc-950 to-zinc-900 p-5 shadow-xl shadow-black/30">
-              <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.35em] text-slate-400">Level {levelData.level}</p>
-                  <div className="mt-2 flex items-baseline gap-3">
-                    <span className="text-5xl font-black tracking-tight text-white sm:text-6xl">
-                      {levelData.level}
-                    </span>
-                    <span className="text-xl font-semibold text-amber-300">
-                      {appState.totalXp.toLocaleString()} XP
-                    </span>
-                  </div>
-                  <div className="mt-4 max-w-md">
-                    <ProgressBar percent={levelData.progress} />
-                  </div>
-                  <p className="mt-3 text-sm text-slate-300">
-                    {levelData.currentLevelXp.toLocaleString()} / {levelData.xpToNextLevel.toLocaleString()} XP to next level
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-left md:min-w-72">
-                  <p className="text-xs uppercase tracking-[0.3em] text-amber-200">Today</p>
-                  <p className="mt-2 text-3xl font-black text-amber-100">{todayXp.toLocaleString()} XP</p>
-                </div>
+          <>
+            <header className="app-page-heading">
+              <div>
+                <p className="app-eyebrow">
+                  {new Intl.DateTimeFormat("en", { weekday: "long", day: "numeric", month: "short" }).format(new Date())}
+                </p>
+                <h1>Hey, {appState.displayName}</h1>
               </div>
-            </section>
+              <Link href="/settings" className="app-level-badge" aria-label={`Your profile, level ${levelData.level}`}>
+                {levelData.level}
+              </Link>
+            </header>
 
-            <div className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
-              <section className="rounded-3xl border border-white/10 bg-[#111214] p-5 shadow-xl shadow-black/20">
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-xl font-bold tracking-tight text-white">Today</h2>
-                  <span className="rounded-full border border-emerald-500/30 bg-emerald-400/10 px-2.5 py-1 text-xs font-medium tracking-[0.18em] text-emerald-200">
-                    {appState.tasks.filter((task) => appState.completedToday[task.id]).length}/{appState.tasks.length}
-                  </span>
+            <main className="space-y-6">
+              <section className="app-level-card rounded-3xl border border-white/10 bg-[#15171a] p-5">
+                <div className="flex items-end justify-between gap-3">
+                  <div>
+                    <p className="app-eyebrow">Level</p>
+                    <div className="mt-1 flex items-baseline gap-2">
+                      <span className="app-level-number">{levelData.level}</span>
+                      <span className="text-sm font-semibold text-amber-300">{appState.totalXp.toLocaleString()} XP</span>
+                    </div>
+                  </div>
+                  <div className="app-streak-chip">
+                    <span aria-hidden="true">🔥</span>
+                    {currentStreak} day streak
+                  </div>
                 </div>
-                <div className="space-y-3">
+                <div className="mt-5">
+                  <ProgressBar percent={levelData.progress} />
+                  <div className="mt-2 flex justify-between gap-3 text-xs text-slate-400">
+                    <span>{levelData.currentLevelXp.toLocaleString()} / {levelData.xpToNextLevel.toLocaleString()} XP</span>
+                    <span>{(levelData.xpToNextLevel - levelData.currentLevelXp).toLocaleString()} to level {levelData.level + 1}</span>
+                  </div>
+                </div>
+                <div className="app-week-strip" aria-label="Last 7 days">
+                  {weekDays.map((day) => (
+                    <div key={day.key} className={`app-week-day${day.isToday ? " is-today" : ""}`}>
+                      <span>{day.label}</span>
+                      <span className={`app-week-dot${day.completed ? " is-complete" : ""}`} />
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="app-today-section">
+                <div className="app-section-heading">
+                  <h2>Today</h2>
+                  <div>
+                    <strong>+{todayXp.toLocaleString()} XP</strong>
+                    <span>{appState.tasks.filter((task) => appState.completedToday[task.id]).length}/{appState.tasks.length}</span>
+                  </div>
+                </div>
+                <ProgressBar
+                  percent={(appState.tasks.filter((task) => appState.completedToday[task.id]).length / appState.tasks.length) * 100}
+                />
+                <div className="mt-3 space-y-2">
                   {appState.tasks.map((task) => {
                     const isCompleted = Boolean(appState.completedToday[task.id]);
                     const stat = STAT_META[task.stat];
@@ -604,14 +609,14 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
                         key={task.id}
                         onClick={() => awardTaskXp(task)}
                         disabled={isCompleted}
-                        className={`flex w-full items-center justify-between rounded-2xl border p-3 text-left transition ${
+                        className={`app-task-row flex w-full items-center justify-between rounded-2xl border p-3 text-left transition ${
                           isCompleted
-                            ? "cursor-default border-emerald-500/30 bg-emerald-500/10"
-                            : "border-white/10 bg-black/20 hover:border-amber-400/50 hover:bg-white/5"
+                            ? "is-completed cursor-default"
+                            : "hover:border-amber-400/50"
                         }`}
                       >
                         <div className="flex items-center gap-3">
-                          <div className={`flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br ${stat.accent}`}>
+                          <div className={`app-task-icon flex h-11 w-11 items-center justify-center rounded-2xl ${stat.accent}`}>
                             {stat.icon}
                           </div>
                           <div>
@@ -620,13 +625,13 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
                           </div>
                         </div>
                         <div
-                          className={`flex h-7 w-7 items-center justify-center rounded-full border text-lg ${
+                          className={`app-task-check flex h-8 w-8 items-center justify-center rounded-full border text-lg ${
                             isCompleted
-                              ? "border-emerald-500 bg-emerald-500 text-zinc-950"
-                              : "border-white/20 text-slate-500"
+                              ? "is-checked"
+                              : ""
                           }`}
                         >
-                          {isCompleted ? "✓" : "□"}
+                          {isCompleted ? "✓" : ""}
                         </div>
                       </button>
                     );
@@ -634,92 +639,26 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
                 </div>
               </section>
 
-              <aside className="space-y-6">
-                <section className="rounded-3xl border border-white/10 bg-[#111214] p-5 shadow-xl shadow-black/20">
-                  <h2 className="text-xl font-bold tracking-tight text-white">Character</h2>
-                  <div className="mt-4 space-y-4">
-                    {statEntries.map(([key, meta]) => {
-                      const statXp = appState.statXp[key];
-                      const statLevel = getLevelData(statXp);
-
-                      return (
-                        <div key={key} className="rounded-2xl border border-white/10 bg-black/15 p-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-2">
-                              <span className={`flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br ${meta.accent}`}>
-                                {meta.icon}
-                              </span>
-                              <div>
-                                <p className="text-xs uppercase tracking-[0.28em] text-slate-400">{meta.name}</p>
-                                <p className="text-lg font-bold text-white">Lv {statLevel.level}</p>
-                              </div>
-                            </div>
-                            <span className="text-sm font-medium text-amber-200">{statXp.toLocaleString()} XP</span>
-                          </div>
-                          <div className="mt-3">
-                            <ProgressBar percent={statLevel.progress} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
-
-                <section className="rounded-3xl border border-white/10 bg-[#111214] p-5 shadow-xl shadow-black/20">
-                  <h2 className="text-xl font-bold tracking-tight text-white">Current Quest</h2>
-                  <div className="mt-4 rounded-2xl border border-white/10 bg-black/15 p-4">
-                    <p className="text-xs uppercase tracking-[0.32em] text-slate-400">{appState.quest.status === "completed" ? "Completed" : "In progress"}</p>
-                    <h3 className="mt-2 text-2xl font-black text-white">{appState.quest.name}</h3>
-                    <p className="mt-2 text-sm text-slate-300">{appState.quest.description}</p>
-                    <div className="mt-4">
-                      <div className="mb-2 flex items-center justify-between">
-                        <span className="text-sm font-medium text-slate-300">
-                          {appState.quest.completedHours} / {appState.quest.targetHours} hours
-                        </span>
-                        <span className="text-sm text-amber-200">{Math.round((appState.quest.completedHours / appState.quest.targetHours) * 100)}%</span>
-                      </div>
-                      <ProgressBar percent={(appState.quest.completedHours / appState.quest.targetHours) * 100} />
-                    </div>
-                    <div className="mt-4 flex items-center justify-between text-xs uppercase tracking-[0.2em] text-slate-400">
-                      <span>Started</span>
-                      <span>{appState.quest.startedAt}</span>
-                    </div>
-                  </div>
-                </section>
-              </aside>
-            </div>
-
-            <div className="grid gap-6 lg:grid-cols-3">
-              <section className="rounded-3xl border border-white/10 bg-[#111214] p-5 shadow-xl shadow-black/20">
-                <h2 className="text-xl font-bold text-white">Streak</h2>
-                <div className="mt-4 flex items-center gap-3">
-                  <span className="text-4xl">🔥</span>
-                  <p className="text-3xl font-black text-amber-200">{currentStreak} DAYS</p>
+              <Link href="/quests" className="app-quest-preview">
+                <div className="app-quest-preview-top">
+                  <span>Current quest</span>
+                  <strong>{Math.round((appState.quest.completedHours / appState.quest.targetHours) * 100)}%</strong>
                 </div>
-              </section>
-
-              <section className="rounded-3xl border border-white/10 bg-[#111214] p-5 shadow-xl shadow-black/20">
-                <h2 className="text-xl font-bold text-white">Total Skating</h2>
-                <div className="mt-4 flex items-end gap-2">
-                  <span className="text-3xl font-black text-white">{appState.totalSkateHours.toFixed(1)}</span>
-                  <span className="pb-1 text-sm uppercase tracking-[0.2em] text-slate-400">hours</span>
-                </div>
-              </section>
-
-              <section className="rounded-3xl border border-white/10 bg-[#111214] p-5 shadow-xl shadow-black/20">
-                <h2 className="text-xl font-bold text-white">10-Year Journey</h2>
-                <div className="mt-4">
-                  <p className="text-lg font-bold text-amber-200">Year {skatingYear}</p>
-                  <p className="mt-2 text-sm text-slate-300">Current skating year based on {appState.skatingStartDate}</p>
-                </div>
-              </section>
-            </div>
-          </main>
+                <h2>{appState.quest.name}</h2>
+                <ProgressBar percent={(appState.quest.completedHours / appState.quest.targetHours) * 100} />
+                <p>{appState.quest.completedHours} of {appState.quest.targetHours} focused hours · since {appState.quest.startedAt}</p>
+              </Link>
+            </main>
+          </>
         )}
 
         {view === "stats" && (
-          <main className="space-y-6">
-            <h2 className="text-2xl font-black tracking-tight text-white">Stats</h2>
+          <>
+            <header className="app-page-title">
+              <p className="app-eyebrow">Daily log</p>
+              <h1>Log</h1>
+            </header>
+            <main className="space-y-6">
 
             <DailyTrainingCheckIn
               key={`${today}-${todayCheckIn?.kneeScore ?? "empty"}-${todayCheckIn?.energyScore ?? "empty"}`}
@@ -816,7 +755,8 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
                 })}
               </div>
             </section>
-          </main>
+            </main>
+          </>
         )}
 
         {view === "workouts" && (
@@ -831,60 +771,76 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
         )}
 
         {view === "quests" && (
-          <main className="space-y-6">
-            <section className="rounded-3xl border border-white/10 bg-[#111214] p-5 shadow-xl shadow-black/20">
-              <div className="flex items-center justify-between gap-4">
-                <h2 className="text-2xl font-black tracking-tight text-white">Current Quest</h2>
-                <Link href="/" className="text-sm font-medium text-amber-200 hover:text-amber-100">
-                  Back to home
-                </Link>
-              </div>
-
-              <div className="mt-5 rounded-2xl border border-white/10 bg-black/15 p-5">
-                <p className="text-xs uppercase tracking-[0.32em] text-slate-400">{appState.quest.status === "completed" ? "Complete" : "Active"}</p>
-                <h3 className="mt-3 text-3xl font-black text-white">{appState.quest.name}</h3>
-                <p className="mt-2 text-slate-300">{appState.quest.description}</p>
-                <div className="mt-4">
-                  <div className="mb-2 flex items-center justify-between text-sm text-slate-300">
-                    <span>{appState.quest.completedHours} / {appState.quest.targetHours} focused hours</span>
-                    <span>{Math.round((appState.quest.completedHours / appState.quest.targetHours) * 100)}%</span>
-                  </div>
-                  <ProgressBar percent={(appState.quest.completedHours / appState.quest.targetHours) * 100} />
+          <>
+            <header className="app-page-title">
+              <p className="app-eyebrow">Focused practice</p>
+              <h1>Quests</h1>
+              <p>One deliberate practice project at a time.</p>
+            </header>
+            <main className="space-y-6">
+            <section className="app-active-quest">
+              <span className="app-quest-status">
+                {appState.quest.status === "completed" ? "Complete" : "In progress"}
+              </span>
+              <div className="app-quest-ring" role="img" aria-label={`${appState.quest.completedHours} of ${appState.quest.targetHours} focused hours`}>
+                <svg viewBox="0 0 168 168" aria-hidden="true">
+                  <circle className="app-quest-ring-track" cx="84" cy="84" r="70" />
+                  <circle
+                    className="app-quest-ring-progress"
+                    cx="84"
+                    cy="84"
+                    r="70"
+                    pathLength={100}
+                    strokeDasharray={`${Math.min(100, (appState.quest.completedHours / appState.quest.targetHours) * 100)} 100`}
+                  />
+                </svg>
+                <div>
+                  <strong>{appState.quest.completedHours}</strong>
+                  <span>of {appState.quest.targetHours} h</span>
                 </div>
-                <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+              </div>
+              <div className="app-quest-copy">
+                <h2>{appState.quest.name}</h2>
+                <p>{appState.quest.description}</p>
+                <span>Started {appState.quest.startedAt}</span>
+              </div>
+              <form
+                className="app-quest-log-form"
+                onSubmit={async (event) => {
+                  event.preventDefault();
+                  const value = Number(focusedHours);
+                  if (!Number.isFinite(value) || value <= 0) {
+                    setFocusMessage("Enter focused hours greater than zero.");
+                    return;
+                  }
+                  if (await updateQuestHours(value)) {
+                    setFocusedHours("");
+                  }
+                }}
+              >
                   <input
                     type="number"
                     min={0.1}
                     step="0.1"
                     placeholder="1.5 focused hours"
+                    aria-label="Focused skate practice hours"
+                    value={focusedHours}
+                    onChange={(event) => setFocusedHours(event.target.value)}
+                    disabled={appState.quest.status === "completed"}
                     className="w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-3 text-white outline-none ring-0 placeholder:text-slate-500 focus:border-amber-400"
-                    id="quest-hours"
                   />
                   <button
-                    onClick={() => {
-                      const input = document.getElementById("quest-hours") as HTMLInputElement | null;
-                      const value = Number(input?.value ?? "0");
-                      if (!Number.isFinite(value) || value <= 0) {
-                        return;
-                      }
-
-                      updateQuestHours(value);
-                      if (input) {
-                        input.value = "";
-                      }
-                    }}
-                    className="rounded-xl bg-amber-400 px-5 py-3 font-bold text-zinc-950 transition hover:bg-amber-300"
+                    type="submit"
+                    disabled={appState.quest.status === "completed"}
+                    className="app-primary-button"
                   >
                     Log focused hours
                   </button>
-                </div>
-
-                {appState.quest.status === "completed" && (
-                  <div className="mt-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-100">
-                    +{appState.quest.completionBonusXp} XP completion bonus awarded.
-                  </div>
-                )}
-              </div>
+              </form>
+              {focusMessage && <p role="status" className="text-sm text-slate-300">{focusMessage}</p>}
+              {appState.quest.status === "completed" && (
+                <p className="app-quest-bonus">+{appState.quest.completionBonusXp} XP completion bonus awarded.</p>
+              )}
             </section>
 
             <section className="rounded-3xl border border-white/10 bg-[#111214] p-5 shadow-xl shadow-black/20">
@@ -925,11 +881,75 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
                 ))}
               </div>
             </section>
-          </main>
+            </main>
+          </>
         )}
 
         {view === "settings" && (
-          <main className="space-y-6">
+          <>
+            <header className="app-page-title">
+              <p className="app-eyebrow">Your progress</p>
+              <h1>Me</h1>
+            </header>
+            <main className="space-y-6">
+            <section>
+              <div className="app-me-metrics">
+                <div className="app-me-metric">
+                  <strong>{appState.totalSkateHours.toFixed(1)}</strong>
+                  <span>Skate hours</span>
+                </div>
+                <div className="app-me-metric">
+                  <strong className="text-orange-300">{currentStreak}</strong>
+                  <span>Day streak</span>
+                </div>
+                <div className="app-me-metric">
+                  <strong>Yr {skatingYear}</strong>
+                  <span>Of skating</span>
+                </div>
+              </div>
+              <div className="mt-5">
+                <div className="mb-3 flex items-baseline justify-between gap-2">
+                  <h2 className="text-lg font-bold text-white">10-year journey</h2>
+                  <span className="text-xs text-slate-400">Since {appState.skatingStartDate}</span>
+                </div>
+                <div className="grid grid-cols-10 gap-1" role="img" aria-label={`Year ${skatingYear} of 10`}>
+                  {Array.from({ length: 10 }, (_, index) => (
+                    <span
+                      key={index}
+                      className={`h-7 rounded-md ${index + 1 < skatingYear ? "bg-amber-400" : index + 1 === skatingYear ? "border-2 border-amber-400 bg-amber-400/15" : "bg-[#262a2f]"}`}
+                    />
+                  ))}
+                </div>
+                <div className="mt-2 flex justify-between text-xs text-slate-500">
+                  <span>{new Date(`${appState.skatingStartDate}T00:00:00`).getFullYear()}</span>
+                  <span className="font-semibold text-amber-300">You are here</span>
+                  <span>{new Date(`${appState.skatingStartDate}T00:00:00`).getFullYear() + 10}</span>
+                </div>
+              </div>
+            </section>
+
+            <section>
+              <h2 className="mb-3 text-xl font-bold text-white">Character</h2>
+              <div className="app-character-grid">
+                {statEntries.map(([key, meta]) => {
+                  const statXp = appState.statXp[key];
+                  const statLevel = getLevelData(statXp);
+
+                  return (
+                    <div key={key} className="app-character-stat">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold uppercase tracking-[0.1em] text-amber-300">{meta.name}</span>
+                        <strong className="text-white">{statLevel.level}</strong>
+                      </div>
+                      <ProgressBar percent={statLevel.progress} />
+                      <span>{statXp.toLocaleString()} XP</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <Link href="/stats" className="app-profile-link">Daily check-in and detailed progression →</Link>
+            </section>
+
             <section className="rounded-3xl border border-white/10 bg-[#111214] p-5 shadow-xl shadow-black/20">
               <h2 className="text-2xl font-black tracking-tight text-white">Settings</h2>
               <div className="mt-5 space-y-5">
@@ -999,8 +1019,48 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
                 </div>
               </div>
             </section>
-          </main>
+            </main>
+          </>
         )}
+
+        <nav className="app-tab-bar" aria-label="Main">
+          {navItems.slice(0, 2).map((item) => (
+            <Link
+              key={item.label}
+              href={item.href}
+              aria-current={item.active ? "page" : undefined}
+              className="app-tab-link"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                {item.icon}
+              </svg>
+              {item.label}
+            </Link>
+          ))}
+          <Link
+            href="/stats"
+            className="app-log-button"
+            aria-label="Log today's training"
+            aria-current={view === "stats" ? "page" : undefined}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </Link>
+          {navItems.slice(2).map((item) => (
+            <Link
+              key={item.label}
+              href={item.href}
+              aria-current={item.active ? "page" : undefined}
+              className="app-tab-link"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                {item.icon}
+              </svg>
+              {item.label}
+            </Link>
+          ))}
+        </nav>
       </div>
     </div>
   );
