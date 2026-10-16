@@ -99,6 +99,16 @@ export function getSkatingYear(startDate: string, currentDate = new Date()) {
   return yearsSinceStart + 1;
 }
 
+export function getEstimatedSkateHours(startDate: string, currentDate = new Date()) {
+  const start = new Date(`${startDate}T00:00:00`);
+  if (Number.isNaN(start.getTime())) return 0;
+
+  const startDay = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate());
+  const currentDay = Date.UTC(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
+  const daysSkating = Math.max(0, Math.floor((currentDay - startDay) / 86_400_000) + 1);
+  return daysSkating * 2;
+}
+
 export const DEFAULT_USER_PROFILE = {
   displayName: "Rin",
   skatingStartDate: "2022-09-15",

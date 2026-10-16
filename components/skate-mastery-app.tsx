@@ -16,6 +16,7 @@ import {
   type Task,
   getCurrentDateKey,
   getCurrentStreak,
+  getEstimatedSkateHours,
   getLevelData,
   getSkatingYear,
 } from "@/lib/game";
@@ -204,6 +205,7 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
     () => getSkatingYear(appState.skatingStartDate),
     [appState.skatingStartDate],
   );
+  const estimatedSkateHours = getEstimatedSkateHours(appState.skatingStartDate);
 
   const today = getCurrentDateKey();
   const yesterdayDate = new Date();
@@ -895,8 +897,8 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
             <section>
               <div className="app-me-metrics">
                 <div className="app-me-metric">
-                  <strong>{appState.totalSkateHours.toFixed(1)}</strong>
-                  <span>Skate hours</span>
+                  <strong>{estimatedSkateHours.toFixed(1)}</strong>
+                  <span>Est. skate hours</span>
                 </div>
                 <div className="app-me-metric">
                   <strong className="text-orange-300">{currentStreak}</strong>
@@ -907,6 +909,9 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
                   <span>Of skating</span>
                 </div>
               </div>
+              <p className="mt-2 text-xs text-slate-500">
+                Estimated at 2 hours per day since {appState.skatingStartDate}, including today.
+              </p>
               <div className="mt-5">
                 <div className="mb-3 flex items-baseline justify-between gap-2">
                   <h2 className="text-lg font-bold text-white">10-year journey</h2>
