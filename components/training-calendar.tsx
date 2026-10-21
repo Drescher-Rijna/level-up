@@ -149,19 +149,19 @@ export default function TrainingCalendar({
         <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={(event) => void submitPractice(event)}>
           <label className="text-sm text-slate-300">
             Session date
-            <input type="date" max={today} value={sessionDate} onChange={(event) => setSessionDate(event.target.value)} required className="mt-1 block w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2 text-white" />
+            <input type="date" max={today} value={sessionDate} onChange={(event) => setSessionDate(event.target.value)} required className="mt-1 block w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2 text-base text-white" />
           </label>
           <label className="text-sm text-slate-300">
             Skate minutes
-            <input type="number" min={1} step={1} value={skateMinutes} onChange={(event) => setSkateMinutes(event.target.value)} required className="mt-1 block w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2 text-white" />
+            <input type="number" min={1} step={1} value={skateMinutes} onChange={(event) => setSkateMinutes(event.target.value)} required className="mt-1 block w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2 text-base text-white" />
           </label>
           <label className="text-sm text-slate-300">
             Focused minutes
-            <input type="number" min={0} step={1} max={skateMinutes} value={focusedMinutes} onChange={(event) => setFocusedMinutes(event.target.value)} required className="mt-1 block w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2 text-white" />
+            <input type="number" min={0} step={1} max={skateMinutes} value={focusedMinutes} onChange={(event) => setFocusedMinutes(event.target.value)} required className="mt-1 block w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2 text-base text-white" />
           </label>
           <label className="text-sm text-slate-300">
             Session notes
-            <input value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional" className="mt-1 block w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2 text-white" />
+            <input value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional" className="mt-1 block w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2 text-base text-white" />
           </label>
           <div className="sm:col-span-2">
             <button type="submit" disabled={saving || (sessionDate === today && (todayKneeScore ?? 5) <= 2)} className="rounded-xl bg-amber-400 px-4 py-2.5 font-bold text-zinc-950 disabled:opacity-50">{saving ? "Saving…" : "Save skate session"}</button>
