@@ -22,7 +22,9 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 ## Supabase schema
 
-Apply [`supabase/schema.sql`](./supabase/schema.sql) in the Supabase SQL Editor when setting up or updating the database. Existing deployments should re-run it after app updates; it idempotently adds the daily check-in and workout tables, policies, and new check-in fields.
+Apply [`supabase/schema.sql`](./supabase/schema.sql) in the Supabase SQL Editor when setting up or updating the database. Re-run it to add the season program, dated skate-practice and focus logs, benchmark history, and additional check-in fields. The update is additive: existing quest, skate-session, check-in, and workout rows are retained. Existing active quest rows are marked as legacy history; their hours are not copied into the new 1,000-hour program.
+
+The ten season principles are initialized per account. The seven existing principle names are retained, and the remaining three start as editable placeholders. Reordering and renaming are available only for unstarted quests; an active quest and completed seasons stay fixed. Focused time is recorded in minutes with each dated skate session and allocated to the active season, carrying session overage into the next season.
 
 ## Learn More
 

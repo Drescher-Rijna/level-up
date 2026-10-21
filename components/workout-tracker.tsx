@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type {
   WorkoutExerciseLog,
   WorkoutPlan,
   WorkoutSession,
   WorkoutSet,
 } from "@/lib/state-types";
-import { WORKOUT_PLANS } from "@/lib/workouts";
+import { getSeasonWorkout, WORKOUT_PLANS } from "@/lib/workouts";
 
 function getDisplayValue(value: number, unit: WorkoutExerciseLog["unit"]) {
   return unit === "seconds" ? `${value}s` : `${value} reps`;
@@ -16,8 +16,9 @@ function getDisplayValue(value: number, unit: WorkoutExerciseLog["unit"]) {
 function makeExerciseLogs(
   plan: WorkoutPlan,
   previousSession?: WorkoutSession,
+  seasonNumber = 1,
 ): WorkoutExerciseLog[] {
-  const definition = WORKOUT_PLANS.find((candidate) => candidate.id === plan);
+  const definition = getSeasonWorkout(plan, seasonNumber);
   if (!definition) return [];
 
   const previousByExercise = new Map(
@@ -49,6 +50,8 @@ export default function WorkoutTracker({
   strengthXp,
   strengthXpAlreadyEarned,
   statusMessage,
+  seasonNumber,
+  kneeScore,
   onComplete,
 }: {
   sessions: WorkoutSession[];
@@ -56,12 +59,20 @@ export default function WorkoutTracker({
   strengthXp: number;
   strengthXpAlreadyEarned: boolean;
   statusMessage: string;
+  seasonNumber: number;
+  kneeScore?: number;
   onComplete: (session: WorkoutSession) => Promise<{ saved: boolean; message: string }>;
 }) {
   const [selectedPlan, setSelectedPlan] = useState<WorkoutPlan | null>(null);
   const [draftId, setDraftId] = useState("");
   const [exercises, setExercises] = useState<WorkoutExerciseLog[]>([]);
   const [completionError, setCompletionError] = useState("");
+  const [restTimerSeconds, setRestTimerSeconds] = useState(0);
+  useEffect(() => {
+    if (restTimerSeconds <= 0) return;
+    const timeout = window.setTimeout(() => setRestTimerSeconds((current) => current - 1), 1000);
+    return () => window.clearTimeout(timeout);
+  }, [restTimerSeconds]);
   const lastSessionByPlan = new Map<WorkoutPlan, WorkoutSession>();
   for (const session of sessions) {
     if (!lastSessionByPlan.has(session.plan)) {
@@ -72,8 +83,9 @@ export default function WorkoutTracker({
   function startPlan(plan: WorkoutPlan) {
     setSelectedPlan(plan);
     setDraftId(crypto.randomUUID());
-    setExercises(makeExerciseLogs(plan, lastSessionByPlan.get(plan)));
+    setExercises(makeExerciseLogs(plan, lastSessionByPlan.get(plan), seasonNumber));
     setCompletionError("");
+    setRestTimerSeconds(0);
   }
 
   function updateSet(
@@ -96,6 +108,10 @@ export default function WorkoutTracker({
   }
 
   async function finishWorkout() {
+    if ((kneeScore ?? 5) <= 2) {
+      setCompletionError(`Knee score ${kneeScore}/5: workout is paused for rehab/rest.`);
+      return;
+    }
     if (!selectedPlan || exercises.length === 0 || exercises.some((exercise) =>
       exercise.loggedSets.some((set) =>
         !set.completed ||
@@ -122,7 +138,7 @@ export default function WorkoutTracker({
     setCompletionError(result.message);
   }
 
-  const selectedDefinition = WORKOUT_PLANS.find((plan) => plan.id === selectedPlan);
+  const selectedDefinition = selectedPlan ? getSeasonWorkout(selectedPlan, seasonNumber) : undefined;
 
   return (
     <main className="space-y-6">
@@ -132,14 +148,20 @@ export default function WorkoutTracker({
         <p className="mt-1 text-sm text-slate-300">
           Track sets, reps, and weight. Your last numbers carry forward as a starting point.
         </p>
+        {kneeScore !== undefined && kneeScore <= 2 && (
+          <p role="alert" className="mt-3 rounded-xl border border-rose-400/30 bg-rose-400/10 p-3 text-sm text-rose-100">
+            Knee score {kneeScore}/5: rehab/rest only. Strength workouts are paused today.
+          </p>
+        )}
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
           {WORKOUT_PLANS.map((plan) => (
             <button
               key={plan.id}
               type="button"
+              disabled={(kneeScore ?? 5) <= 2}
               aria-pressed={selectedPlan === plan.id}
               onClick={() => startPlan(plan.id)}
-              className={`rounded-2xl border p-4 text-left transition ${
+              className={`rounded-2xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-40 ${
                 selectedPlan === plan.id
                   ? "border-amber-300/70 bg-amber-300/10"
                   : "border-white/10 bg-black/15 hover:border-white/30"
@@ -178,6 +200,21 @@ export default function WorkoutTracker({
           </div>
 
           <div className="mt-4 space-y-3">
+            {selectedDefinition.restSeconds && (
+              <div className="rounded-xl border border-amber-300/20 bg-amber-300/5 p-3 text-sm text-amber-100" role="status">
+                Season rest cap: {selectedDefinition.restSeconds} seconds
+                {restTimerSeconds > 0 && <strong className="ml-2">Resting: {restTimerSeconds}s</strong>}
+              </div>
+            )}
+            <div className="rounded-2xl border border-amber-300/20 bg-amber-300/5 p-4">
+              <h4 className="font-bold text-amber-100">Season {seasonNumber} · {selectedDefinition.seasonName}</h4>
+              <p className="mt-2 text-xs font-bold uppercase tracking-wide text-slate-400">Pre-workout and warmup</p>
+              <ul className="mt-1 list-inside list-disc space-y-1 text-sm text-slate-200">
+                {selectedDefinition.preWorkout.map((step) => <li key={step}>{step}</li>)}
+              </ul>
+              {selectedDefinition.cues.map((cue) => <p key={cue} className="mt-2 text-sm text-amber-100">{cue}</p>)}
+              {selectedDefinition.restSeconds && <p className="mt-2 text-sm text-amber-100">Gym rest cap: {selectedDefinition.restSeconds} seconds between sets.</p>}
+            </div>
             {exercises.map((exercise) => {
               const previousExercise = lastSessionByPlan.get(selectedPlan)?.exercises.find(
                 (candidate) => candidate.id === exercise.id,
@@ -240,7 +277,12 @@ export default function WorkoutTracker({
                           type="button"
                           aria-label={`Mark set ${setIndex + 1} ${set.completed ? "incomplete" : "complete"}`}
                           aria-pressed={set.completed}
-                          onClick={() => updateSet(exercise.id, setIndex, { completed: !set.completed })}
+                          onClick={() => {
+                            updateSet(exercise.id, setIndex, { completed: !set.completed });
+                            if (!set.completed && selectedDefinition.restSeconds) {
+                              setRestTimerSeconds(selectedDefinition.restSeconds);
+                            }
+                          }}
                           className={`h-9 w-9 rounded-lg border font-bold ${
                             set.completed
                               ? "border-emerald-400 bg-emerald-400 text-zinc-950"

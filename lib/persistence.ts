@@ -6,7 +6,10 @@ import {
 } from "@/lib/game";
 import type {
   AppState,
+  BenchmarkLog,
   QuestTemplate,
+  SeasonQuest,
+  SkatePracticeLog,
   TrainingCheckIn,
   WorkoutSession,
 } from "@/lib/state-types";
@@ -19,6 +22,11 @@ export async function loadUserState(user: User): Promise<Partial<AppState>> {
     throw new Error("Supabase is not configured.");
   }
 
+  const { error: initializeProgramError } = await supabase.rpc("initialize_training_program");
+  if (initializeProgramError) {
+    throw new Error(initializeProgramError.message);
+  }
+
   const today = getCurrentDateKey();
   const results = await Promise.all([
       supabase.from("profiles").select("display_name, skating_start_date").eq("id", user.id).maybeSingle(),
@@ -27,12 +35,16 @@ export async function loadUserState(user: User): Promise<Partial<AppState>> {
       supabase.from("quests").select("*").eq("user_id", user.id).order("created_at", { ascending: false }),
       supabase.from("skate_sessions").select("hours").eq("user_id", user.id),
       supabase.from("quest_templates").select("id, name, description, target_hours, completion_bonus_xp").eq("active", true).order("sort_order"),
-      supabase.from("training_check_ins").select("check_in_date, knee_score, energy_score, co2_tolerance_seconds, workout_plan").eq("user_id", user.id).order("check_in_date"),
+      supabase.from("training_check_ins").select("check_in_date, knee_score, energy_score, co2_tolerance_seconds, workout_plan, skated, workout_completed, pm_recon_completed, sleep_hours").eq("user_id", user.id).order("check_in_date"),
       supabase.from("workout_sessions").select("id, plan, completed_at, exercises").eq("user_id", user.id).order("completed_at", { ascending: false }),
+      supabase.from("training_programs").select("accumulated_focus_hours").eq("user_id", user.id).single(),
+      supabase.from("training_quests").select("id, sort_order, name, description, target_focus_minutes, focused_minutes, status, started_at, completed_at").eq("user_id", user.id).order("sort_order"),
+      supabase.from("skate_practice_logs").select("id, session_date, skate_minutes, focused_minutes, notes").eq("user_id", user.id).order("session_date", { ascending: false }),
+      supabase.from("benchmark_logs").select("id, season_order, metric, value, notes, tested_at").eq("user_id", user.id).order("tested_at", { ascending: false }),
     ]);
 
-  const [profileResult, tasksResult, completionsResult, questResult, sessionsResult, questTemplatesResult, checkInsResult, workoutSessionsResult] = results;
-  const firstError = [profileResult, tasksResult, completionsResult, questResult, sessionsResult, questTemplatesResult, checkInsResult, workoutSessionsResult].find(
+  const [profileResult, tasksResult, completionsResult, questResult, sessionsResult, questTemplatesResult, checkInsResult, workoutSessionsResult, trainingProgramResult, seasonQuestsResult, skatePracticeLogsResult, benchmarkLogsResult] = results;
+  const firstError = [...results].find(
     (result) => result.error,
   );
   if (firstError?.error) {
@@ -65,29 +77,7 @@ export async function loadUserState(user: User): Promise<Partial<AppState>> {
   const completedQuestXp = (questResult.data ?? [])
     .filter((candidate) => candidate.status === "completed")
     .reduce((sum, completedQuest) => sum + completedQuest.completion_bonus_xp, 0);
-  let quest = (questResult.data ?? []).find((candidate) => candidate.status === "active") ?? null;
-
-  if (!quest) {
-    const { data: createdQuest, error: createQuestError } = await supabase
-      .from("quests")
-      .insert({
-        user_id: user.id,
-        name: DEFAULT_QUEST.name,
-        description: DEFAULT_QUEST.description,
-        target_hours: DEFAULT_QUEST.targetHours,
-        completed_hours: 0,
-        status: "active",
-        started_at: getCurrentDateKey(),
-        completion_bonus_xp: DEFAULT_QUEST.completionBonusXp,
-      })
-      .select("*")
-      .single();
-
-    if (createQuestError) {
-      throw new Error(createQuestError.message);
-    }
-    quest = createdQuest;
-  }
+  const quest = (questResult.data ?? []).find((candidate) => candidate.status === "active") ?? null;
 
   return {
     displayName: profile?.display_name ?? user.email?.split("@")[0] ?? DEFAULT_USER_PROFILE.displayName,
@@ -113,7 +103,9 @@ export async function loadUserState(user: User): Promise<Partial<AppState>> {
           completionBonusXp: quest.completion_bonus_xp,
         }
       : { ...DEFAULT_QUEST },
-    totalSkateHours: (sessionsResult.data ?? []).reduce((sum, session) => sum + Number(session.hours), 0),
+    totalSkateHours:
+      (sessionsResult.data ?? []).reduce((sum, session) => sum + Number(session.hours), 0) +
+      (skatePracticeLogsResult.data ?? []).reduce((sum, session) => sum + session.skate_minutes / 60, 0),
     questBonusAwarded: Boolean(quest?.status === "completed"),
     questTemplates,
     trainingCheckIns: (checkInsResult.data ?? []).map((checkIn): TrainingCheckIn => ({
@@ -121,6 +113,10 @@ export async function loadUserState(user: User): Promise<Partial<AppState>> {
       kneeScore: checkIn.knee_score,
       energyScore: checkIn.energy_score,
       co2ToleranceSeconds: checkIn.co2_tolerance_seconds,
+      sleepHours: checkIn.sleep_hours === null ? null : Number(checkIn.sleep_hours),
+      skated: checkIn.skated,
+      workoutCompleted: checkIn.workout_completed,
+      pmReconCompleted: checkIn.pm_recon_completed,
       workoutPlan: checkIn.workout_plan,
     })),
     workoutSessions: (workoutSessionsResult.data ?? []).map((session): WorkoutSession => ({
@@ -128,6 +124,33 @@ export async function loadUserState(user: User): Promise<Partial<AppState>> {
       plan: session.plan,
       completedAt: session.completed_at,
       exercises: session.exercises,
+    })),
+    seasonQuests: (seasonQuestsResult.data ?? []).map((quest): SeasonQuest => ({
+      id: quest.id,
+      sortOrder: quest.sort_order,
+      name: quest.name,
+      description: quest.description,
+      targetFocusMinutes: quest.target_focus_minutes,
+      focusedMinutes: quest.focused_minutes,
+      status: quest.status,
+      startedAt: quest.started_at,
+      completedAt: quest.completed_at,
+    })),
+    accumulatedFocusMinutes: Math.round(Number(trainingProgramResult.data?.accumulated_focus_hours ?? 0) * 60),
+    skatePracticeLogs: (skatePracticeLogsResult.data ?? []).map((log): SkatePracticeLog => ({
+      id: log.id,
+      sessionDate: log.session_date,
+      skateMinutes: log.skate_minutes,
+      focusedMinutes: log.focused_minutes,
+      notes: log.notes,
+    })),
+    benchmarkLogs: (benchmarkLogsResult.data ?? []).map((log): BenchmarkLog => ({
+      id: log.id,
+      seasonOrder: log.season_order,
+      metric: log.metric,
+      value: Number(log.value),
+      notes: log.notes,
+      testedAt: log.tested_at,
     })),
   };
 }
@@ -170,10 +193,65 @@ export async function saveTrainingCheckIn(
       energy_score: checkIn.energyScore,
       co2_tolerance_seconds: checkIn.co2ToleranceSeconds,
       workout_plan: checkIn.workoutPlan,
+      skated: checkIn.skated,
+      workout_completed: checkIn.workoutCompleted,
+      pm_recon_completed: checkIn.pmReconCompleted,
+      sleep_hours: checkIn.sleepHours,
     },
     { onConflict: "user_id,check_in_date" },
   );
   if (error) throw new Error(error.message);
+}
+
+export async function reorderTrainingQuests(ids: string[]) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const { error } = await supabase.rpc("reorder_training_quests", { p_order: ids });
+  if (error) throw new Error(error.message);
+}
+
+export async function renameTrainingQuest(id: string, name: string, description: string) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const { error } = await supabase.rpc("rename_training_quest", {
+    p_quest_id: id,
+    p_name: name,
+    p_description: description,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function startTrainingQuest(id: string) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const { error } = await supabase.rpc("start_training_quest", { p_quest_id: id });
+  if (error) throw new Error(error.message);
+}
+
+export async function logSkatePractice(
+  session: Omit<SkatePracticeLog, "id">,
+) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const { data, error } = await supabase.rpc("log_skate_practice", {
+    p_session_date: session.sessionDate,
+    p_skate_minutes: session.skateMinutes,
+    p_focused_minutes: session.focusedMinutes,
+    p_notes: session.notes,
+  });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function logBenchmark(
+  entry: Omit<BenchmarkLog, "id"> & { questId: string },
+) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const { data, error } = await supabase.rpc("log_benchmark", {
+    p_quest_id: entry.questId,
+    p_metric: entry.metric,
+    p_value: entry.value,
+    p_notes: entry.notes,
+    p_tested_at: entry.testedAt,
+  });
+  if (error) throw new Error(error.message);
+  return data;
 }
 
 export async function saveWorkoutSession(user: User, session: WorkoutSession) {

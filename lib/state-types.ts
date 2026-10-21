@@ -16,7 +16,40 @@ export type TrainingCheckIn = {
   kneeScore: number;
   energyScore: number;
   co2ToleranceSeconds: number | null;
+  sleepHours: number | null;
+  skated: boolean;
+  workoutCompleted: boolean;
+  pmReconCompleted: boolean;
   workoutPlan?: WorkoutPlan | "rest" | null;
+};
+
+export type SeasonQuest = {
+  id: string;
+  sortOrder: number;
+  name: string;
+  description: string;
+  targetFocusMinutes: number;
+  focusedMinutes: number;
+  status: "planned" | "active" | "completed";
+  startedAt: string | null;
+  completedAt: string | null;
+};
+
+export type SkatePracticeLog = {
+  id: string;
+  sessionDate: string;
+  skateMinutes: number;
+  focusedMinutes: number;
+  notes: string;
+};
+
+export type BenchmarkLog = {
+  id: string;
+  seasonOrder: number;
+  metric: string;
+  value: number;
+  notes: string;
+  testedAt: string;
 };
 
 export type WorkoutExerciseDefinition = {
@@ -32,6 +65,7 @@ export type WorkoutExerciseDefinition = {
 export type WorkoutPlanDefinition = {
   id: WorkoutPlan;
   name: string;
+  preWorkout: string[];
   exercises: WorkoutExerciseDefinition[];
 };
 
@@ -66,4 +100,8 @@ export type AppState = {
   questTemplates: QuestTemplate[];
   trainingCheckIns: TrainingCheckIn[];
   workoutSessions: WorkoutSession[];
+  seasonQuests: SeasonQuest[];
+  accumulatedFocusMinutes: number;
+  skatePracticeLogs: SkatePracticeLog[];
+  benchmarkLogs: BenchmarkLog[];
 };
