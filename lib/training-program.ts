@@ -87,24 +87,52 @@ export function getWeekDates(today = new Date()) {
   });
 }
 
-export function isBenchmarkDue(quest: SeasonQuest | undefined, logs: { seasonOrder: number; metric: string }[]) {
-  if (!quest || !quest.startedAt) return false;
-  const today = getCurrentDateKey();
-  const daysElapsed = Math.floor(
-    (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${quest.startedAt}T00:00:00Z`)) / 86400000,
-  );
-  const reachedHourTarget = quest.focusedMinutes >= quest.targetFocusMinutes;
-  if (!reachedHourTarget && daysElapsed < 42) return false;
-  return BENCHMARK_GOALS.some(
+const BENCHMARK_DUE_AFTER_DAYS = 42;
+const BENCHMARK_HEADS_UP_DAYS = 7;
+
+type BenchmarkLogKey = { seasonOrder: number; metric: string };
+type BenchmarkGoal = (typeof BENCHMARK_GOALS)[number];
+
+export type BenchmarkAlert = {
+  quest: SeasonQuest;
+  isDue: boolean;
+  daysUntilDue: number;
+  remainingGoals: BenchmarkGoal[];
+};
+
+export function getRemainingBenchmarkGoals(quest: SeasonQuest, logs: BenchmarkLogKey[]) {
+  return BENCHMARK_GOALS.filter(
     (goal) => !logs.some((log) => log.seasonOrder === quest.sortOrder && log.metric === goal.id),
   );
 }
 
-export function getDueBenchmarkQuests(
-  quests: SeasonQuest[],
-  logs: { seasonOrder: number; metric: string }[],
-) {
+// Due at six weeks or the hour target; a heads-up starts one week before the six-week mark.
+export function getBenchmarkAlert(quest: SeasonQuest | undefined, logs: BenchmarkLogKey[]): BenchmarkAlert | null {
+  if (!quest || !quest.startedAt) return null;
+  const remainingGoals = getRemainingBenchmarkGoals(quest, logs);
+  if (remainingGoals.length === 0) return null;
+  const today = getCurrentDateKey();
+  const daysElapsed = Math.floor(
+    (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${quest.startedAt}T00:00:00Z`)) / 86400000,
+  );
+  const daysUntilDue = Math.max(BENCHMARK_DUE_AFTER_DAYS - daysElapsed, 0);
+  const reachedHourTarget = quest.focusedMinutes >= quest.targetFocusMinutes;
+  const isDue = reachedHourTarget || daysUntilDue === 0;
+  if (!isDue && daysUntilDue > BENCHMARK_HEADS_UP_DAYS) return null;
+  return { quest, isDue, daysUntilDue, remainingGoals };
+}
+
+export function getBenchmarkAlerts(quests: SeasonQuest[], logs: BenchmarkLogKey[]) {
   return quests
-    .filter((quest) => quest.status !== "planned" && isBenchmarkDue(quest, logs))
-    .sort((first, second) => first.sortOrder - second.sortOrder);
+    .filter((quest) => quest.status !== "planned")
+    .map((quest) => getBenchmarkAlert(quest, logs))
+    .filter((alert): alert is BenchmarkAlert => alert !== null)
+    .sort((first, second) => first.quest.sortOrder - second.quest.sortOrder);
+}
+
+export function describeBenchmarkAlert(alert: BenchmarkAlert) {
+  const timing = alert.isDue
+    ? "is due"
+    : `is due in ${alert.daysUntilDue} ${alert.daysUntilDue === 1 ? "day" : "days"}`;
+  return `Season ${alert.quest.sortOrder} benchmark testing ${timing}`;
 }

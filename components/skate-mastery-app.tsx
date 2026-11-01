@@ -20,7 +20,7 @@ import {
   getLevelData,
   getSkatingYear,
 } from "@/lib/game";
-import { getDueBenchmarkQuests } from "@/lib/training-program";
+import { BENCHMARK_GOALS, describeBenchmarkAlert, getBenchmarkAlerts } from "@/lib/training-program";
 import type {
   AppState,
   BenchmarkLog,
@@ -293,7 +293,7 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
   const nextSeasonQuest = appState.seasonQuests.find((quest) => quest.status === "planned");
   const benchmarkSeasonQuest = activeSeasonQuest ??
     [...appState.seasonQuests].reverse().find((quest) => quest.status === "completed");
-  const dueBenchmarkQuests = getDueBenchmarkQuests(appState.seasonQuests, appState.benchmarkLogs);
+  const benchmarkAlerts = getBenchmarkAlerts(appState.seasonQuests, appState.benchmarkLogs);
 
   if (!mounted) {
     return (
@@ -710,11 +710,11 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
             </header>
 
             <main className="space-y-6">
-              {dueBenchmarkQuests.length > 0 && (
-                <Link href="/benchmarks" className="block rounded-2xl border border-amber-300/40 bg-amber-300/10 p-4 text-amber-100">
-                  Benchmark testing is due for {dueBenchmarkQuests.map((quest) => `Season ${quest.sortOrder}`).join(", ")}. Open the dashboard →
+              {benchmarkAlerts.map((alert) => (
+                <Link key={alert.quest.id} href="/benchmarks" className="block rounded-2xl border border-amber-300/40 bg-amber-300/10 p-4 text-amber-100">
+                  {describeBenchmarkAlert(alert)}. {alert.remainingGoals.length} of {BENCHMARK_GOALS.length} tests left: {alert.remainingGoals.map((goal) => goal.name).join(", ")}. Open the dashboard →
                 </Link>
-              )}
+              ))}
               <SkateBlockTodayCard snapshot={appState.skateBlock} today={today} />
               <section className="app-level-card rounded-3xl border border-white/10 bg-[#15171a] p-5">
                 <div className="flex items-end justify-between gap-3">

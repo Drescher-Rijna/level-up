@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import type { BenchmarkLog, SeasonQuest } from "@/lib/state-types";
 import { getCurrentDateKey } from "@/lib/game";
-import { BENCHMARK_GOALS, getDueBenchmarkQuests } from "@/lib/training-program";
+import { BENCHMARK_GOALS, describeBenchmarkAlert, getBenchmarkAlerts } from "@/lib/training-program";
 
 export default function BenchmarksDashboard({
   quests,
@@ -24,7 +24,8 @@ export default function BenchmarksDashboard({
   const [testedAt, setTestedAt] = useState(getCurrentDateKey());
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-  const dueQuests = getDueBenchmarkQuests(quests, logs);
+  const benchmarkAlerts = getBenchmarkAlerts(quests, logs);
+  const dueQuests = benchmarkAlerts.filter((alert) => alert.isDue).map((alert) => alert.quest);
   const selectedQuest = quests.find((item) => item.id === selectedQuestId) ??
     dueQuests[0] ?? defaultQuest;
   const metricDefinition = BENCHMARK_GOALS.find((goal) => goal.id === metric) ?? BENCHMARK_GOALS[0];
@@ -56,9 +57,12 @@ export default function BenchmarksDashboard({
         <p className="text-xs uppercase tracking-[0.3em] text-amber-300">Progress testing</p>
         <h2 className="mt-2 text-2xl font-black text-white">Benchmarks</h2>
         <p className="mt-1 text-sm text-slate-300">Record results by date and season. Units and criteria are shown with each goal.</p>
-        {dueQuests.map((quest) => (
-          <div key={quest.id} role="alert" className="mt-4 rounded-2xl border border-amber-300/40 bg-amber-300/10 p-4 text-amber-100">
-            Season {quest.sortOrder} benchmark testing is due. Test at six weeks or 100 focused hours, whichever comes first.
+        {benchmarkAlerts.map((alert) => (
+          <div key={alert.quest.id} role="alert" className="mt-4 rounded-2xl border border-amber-300/40 bg-amber-300/10 p-4 text-amber-100">
+            <p>{describeBenchmarkAlert(alert)}. Test at six weeks or 100 focused hours, whichever comes first.</p>
+            <p className="mt-2 text-sm">
+              Still to test ({alert.remainingGoals.length} of {BENCHMARK_GOALS.length}): {alert.remainingGoals.map((goal) => goal.name).join(", ")}
+            </p>
           </div>
         ))}
         {!selectedQuest && <p className="mt-4 rounded-xl border border-white/10 p-3 text-sm text-slate-300">Start a season quest to associate benchmark results with a season.</p>}
