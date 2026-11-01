@@ -40,6 +40,9 @@ function makeExerciseLogs(
   });
 }
 
+// Plans built around deadlifts, lunges or box squats.
+const HEAVY_LOWER_BODY_PLANS: WorkoutPlan[] = ["1", "3"];
+
 function formatSessionDate(date: string) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(date));
 }
@@ -139,6 +142,9 @@ export default function WorkoutTracker({
   }
 
   const selectedDefinition = selectedPlan ? getSeasonWorkout(selectedPlan, seasonNumber) : undefined;
+  // Saturday is the speed & commitment skate session, so Friday stays light on legs and back.
+  const isDayBeforeSpeedSession = new Date().getDay() === 5;
+  const isHeavyLowerBodyPlan = selectedPlan !== null && HEAVY_LOWER_BODY_PLANS.includes(selectedPlan);
 
   return (
     <main className="space-y-6">
@@ -151,6 +157,13 @@ export default function WorkoutTracker({
         {kneeScore !== undefined && kneeScore <= 2 && (
           <p role="alert" className="mt-3 rounded-xl border border-rose-400/30 bg-rose-400/10 p-3 text-sm text-rose-100">
             Knee score {kneeScore}/5: rehab/rest only. Strength workouts are paused today.
+          </p>
+        )}
+        {isDayBeforeSpeedSession && (
+          <p role="alert" className="mt-3 rounded-xl border border-amber-300/40 bg-amber-300/10 p-3 text-sm text-amber-100">
+            {isHeavyLowerBodyPlan
+              ? "It's the day before Saturday's skate session: skip this workout's heavy leg and back work, or move it."
+              : "Day before Saturday's skate session: no heavy leg or back work today."}
           </p>
         )}
         <div className="mt-5 grid gap-3 sm:grid-cols-3">

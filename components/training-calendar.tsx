@@ -5,7 +5,6 @@ import type { FormEvent } from "react";
 import type { SeasonQuest, SkatePracticeLog, TrainingCheckIn, WorkoutSession } from "@/lib/state-types";
 import { getCurrentDateKey } from "@/lib/game";
 import { TRAINING_WEEK } from "@/lib/training-program";
-import { SEASON_MODIFIERS } from "@/lib/workouts";
 
 function getSessionDate(session: WorkoutSession) {
   const date = new Date(session.completedAt);
@@ -18,7 +17,6 @@ export default function TrainingCalendar({
   workoutSessions,
   totalSkateHours,
   activeQuest,
-  seasonNumber,
   todayKneeScore,
   onLogPractice,
 }: {
@@ -27,7 +25,6 @@ export default function TrainingCalendar({
   workoutSessions: WorkoutSession[];
   totalSkateHours: number;
   activeQuest?: SeasonQuest;
-  seasonNumber: number;
   todayKneeScore?: number;
   onLogPractice: (entry: Omit<SkatePracticeLog, "id">) => Promise<void>;
 }) {
@@ -122,12 +119,6 @@ export default function TrainingCalendar({
                 </ul>
                 {day.recon && <p className="mt-3 text-sm text-slate-300">{day.recon}</p>}
                 {day.mission && <p className="mt-3 text-sm leading-6 text-slate-300">{day.mission}</p>}
-                {day.mission && SEASON_MODIFIERS[seasonNumber].cues.map((cue) => (
-                  <p key={cue} className="mt-2 text-sm text-amber-100">Season {seasonNumber} mission cue: {cue}</p>
-                ))}
-                {day.mission && SEASON_MODIFIERS[seasonNumber].warmup.map((cue) => (
-                  <p key={cue} className="mt-1 text-sm text-amber-100">Season {seasonNumber} warmup: {cue}</p>
-                ))}
                 {day.break && <p className="mt-2 text-sm text-amber-100">Break: {day.break}</p>}
                 <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs">
                   <span className={skated ? "text-emerald-300" : "text-slate-500"}>{skated ? "☑" : "☐"} Skated</span>

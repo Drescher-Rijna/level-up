@@ -3,7 +3,6 @@
 import { useState } from "react";
 import type { SeasonQuest } from "@/lib/state-types";
 import { getSeasonProgress } from "@/lib/training-program";
-import { SEASON_MODIFIERS } from "@/lib/workouts";
 
 export default function SeasonProgram({
   quests,
@@ -28,7 +27,7 @@ export default function SeasonProgram({
   const activeQuest = quests.find((quest) => quest.status === "active");
   const nextQuest = quests.find((quest) => quest.status === "planned");
   const currentSeason = activeQuest?.sortOrder ?? nextQuest?.sortOrder ?? 10;
-  const modifier = SEASON_MODIFIERS[currentSeason];
+  const currentSeasonName = activeQuest?.name ?? nextQuest?.name ?? "Complete";
   const totalFocusedHours = accumulatedFocusMinutes / 60;
 
   async function reorder(fromId: string, toId: string) {
@@ -68,7 +67,7 @@ export default function SeasonProgram({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-amber-300">1,000-hour masterplan</p>
-          <h2 className="mt-2 text-2xl font-black text-white">Season {currentSeason} of 10 · {modifier.name}</h2>
+          <h2 className="mt-2 text-2xl font-black text-white">Season {currentSeason} of 10 · {currentSeasonName}</h2>
           <p className="mt-1 text-sm text-slate-300">
             {totalFocusedHours.toFixed(1)} / 1,000 focused hours · {quests.filter((quest) => quest.status === "completed").length} seasons complete
           </p>
@@ -107,11 +106,6 @@ export default function SeasonProgram({
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
             <div className="h-full rounded-full bg-amber-400" style={{ width: `${(activeQuest.focusedMinutes / activeQuest.targetFocusMinutes) * 100}%` }} />
           </div>
-          <div className="mt-3 space-y-1 text-sm text-amber-100">
-            {modifier.cues.map((cue) => <p key={cue}>{cue}</p>)}
-            {modifier.warmup.map((cue) => <p key={cue}>Warmup: {cue}</p>)}
-            {modifier.restSeconds && <p>Gym rest timer: {modifier.restSeconds} seconds.</p>}
-          </div>
         </div>
       )}
 
@@ -119,7 +113,6 @@ export default function SeasonProgram({
         {quests.map((quest, index) => {
           const locked = quest.status !== "planned";
           const canStart = quest.id === nextQuest?.id && !activeQuest;
-          const seasonCue = SEASON_MODIFIERS[quest.sortOrder];
           return (
             <li
               key={quest.id}
@@ -173,7 +166,7 @@ export default function SeasonProgram({
                     <>
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="font-bold text-white">{quest.name}</h3>
-                        <span className="rounded-full border border-white/10 px-2 py-0.5 text-xs text-slate-400">Season {quest.sortOrder} · {seasonCue.name}</span>
+                        <span className="rounded-full border border-white/10 px-2 py-0.5 text-xs text-slate-400">Season {quest.sortOrder}</span>
                         <span className="text-xs uppercase tracking-wide text-slate-400">{quest.status}</span>
                       </div>
                       <p className="mt-1 text-sm text-slate-400">{quest.description}</p>

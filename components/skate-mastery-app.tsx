@@ -35,9 +35,17 @@ import BenchmarksDashboard from "@/components/benchmarks-dashboard";
 import SeasonProgram from "@/components/season-program";
 import TrainingCalendar from "@/components/training-calendar";
 import WorkoutTracker from "@/components/workout-tracker";
+import SkateBlockPlanner, { SkateBlockTodayCard, type SkateBlockActions } from "@/components/skate-block";
 import {
+  addParkingLotIdea,
+  completeBlockReview,
   completeTask,
+  createSkateBlock,
   ensureUserProfile,
+  loadSkateBlock,
+  logBlockBenchmark,
+  logBlockRecoveryCheck,
+  setBlockDayOverride,
   loadUserState,
   logBenchmark,
   logSkatePractice,
@@ -49,14 +57,14 @@ import {
 } from "@/lib/persistence";
 import { getSupabaseClient, getSupabaseConfigurationError } from "@/lib/supabase";
 
-type AppView = "home" | "stats" | "workouts" | "quests" | "settings" | "calendar" | "benchmarks";
+type AppView = "home" | "stats" | "workouts" | "quests" | "settings" | "calendar" | "benchmarks" | "block";
 
 const DEFAULT_QUEST_TEMPLATES: QuestTemplate[] = [
   { id: "back-seat-weight-distribution", name: "Back seat weight distribution", description: "Keep your weight centered and controlled through the back seat.", targetHours: 100, completionBonusXp: 2000 },
   { id: "floating-on-your-tricks", name: "Floating on your tricks", description: "Build a lighter, more effortless feeling in your tricks.", targetHours: 100, completionBonusXp: 2000 },
   { id: "keep-the-board-in-front-of-you", name: "Keep the board in front of you", description: "Practice staying connected to the board through the full trick.", targetHours: 100, completionBonusXp: 2000 },
   { id: "separate-shoulders-and-hips", name: "Separate shoulders and hips", description: "Develop independent control of your shoulders and hips.", targetHours: 100, completionBonusXp: 2000 },
-  { id: "pinching-your-truck", name: "Pinching your truck", description: "Practice a consistent, controlled pinch on the truck.", targetHours: 100, completionBonusXp: 2000 },
+  { id: "pinching-your-truck", name: "Locking in grinds", description: "Practice a consistent, controlled pinch on the truck.", targetHours: 100, completionBonusXp: 2000 },
   { id: "keeping-speed-on-exit", name: "Keeping speed on exit", description: "Carry useful speed through the landing and exit.", targetHours: 100, completionBonusXp: 2000 },
   { id: "doing-tricks-with-speed", name: "Doing tricks with speed", description: "Build confidence and control while practicing with speed.", targetHours: 100, completionBonusXp: 2000 },
 ];
@@ -95,6 +103,7 @@ function buildDefaultState(): AppState {
     accumulatedFocusMinutes: 0,
     skatePracticeLogs: [],
     benchmarkLogs: [],
+    skateBlock: { status: "unavailable" },
   };
 }
 
@@ -650,6 +659,23 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
     return { saved: true, message };
   }
 
+  // Every block write reloads the block so the UI shows what the database accepted.
+  async function saveBlockChange(save: () => Promise<void>) {
+    await save();
+    const skateBlock = await loadSkateBlock(authenticatedUser);
+    setAppState((current) => ({ ...current, skateBlock }));
+  }
+
+  const blockId = appState.skateBlock.status === "ready" ? appState.skateBlock.block.id : "";
+  const skateBlockActions: SkateBlockActions = {
+    onCreate: (block) => saveBlockChange(() => createSkateBlock(block)),
+    onLogBenchmark: (run) => saveBlockChange(() => logBlockBenchmark(run)),
+    onSetDayOverride: (date, sessionKind, reason) => saveBlockChange(() => setBlockDayOverride(blockId, date, sessionKind, reason)),
+    onAddParkingLotIdea: (idea) => saveBlockChange(() => addParkingLotIdea(blockId, idea)),
+    onLogRecoveryCheck: (check) => saveBlockChange(() => logBlockRecoveryCheck(blockId, check)),
+    onCompleteReview: (adoptedIdeaId) => saveBlockChange(() => completeBlockReview(blockId, adoptedIdeaId)),
+  };
+
   async function saveProfile(displayName: string, skatingStartDate: string) {
     try {
       await ensureUserProfile(authenticatedUser, displayName, skatingStartDate);
@@ -689,6 +715,7 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
                   Benchmark testing is due for {dueBenchmarkQuests.map((quest) => `Season ${quest.sortOrder}`).join(", ")}. Open the dashboard →
                 </Link>
               )}
+              <SkateBlockTodayCard snapshot={appState.skateBlock} today={today} />
               <section className="app-level-card rounded-3xl border border-white/10 bg-[#15171a] p-5">
                 <div className="flex items-end justify-between gap-3">
                   <div>
@@ -869,7 +896,6 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
               workoutSessions={appState.workoutSessions}
               totalSkateHours={appState.totalSkateHours}
               activeQuest={activeSeasonQuest}
-              seasonNumber={activeSeasonQuest?.sortOrder ?? nextSeasonQuest?.sortOrder ?? 10}
               todayKneeScore={todayCheckIn?.kneeScore}
               onLogPractice={savePracticeLog}
             />
@@ -888,6 +914,24 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
               logs={appState.benchmarkLogs}
               onSave={saveBenchmarkResult}
             />
+          </>
+        )}
+
+        {view === "block" && (
+          <>
+            <header className="app-page-title">
+              <p className="app-eyebrow">Inside {activeSeasonQuest?.name ?? "the active season"}</p>
+              <h1>Skate block</h1>
+              <p>Hours are logged, but benchmarks decide progress.</p>
+            </header>
+            <main>
+              <SkateBlockPlanner
+                snapshot={appState.skateBlock}
+                today={today}
+                practiceLogs={appState.skatePracticeLogs}
+                actions={skateBlockActions}
+              />
+            </main>
           </>
         )}
 
@@ -925,7 +969,8 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
                 <p className="mt-2 text-amber-200">Legacy quest: {appState.quest.name} · {appState.quest.completedHours} / {appState.quest.targetHours} historical hours</p>
               )}
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Link href="/block" className="rounded-2xl border border-white/10 bg-[#111214] p-4 text-sm font-semibold text-amber-200">6-week skate block →</Link>
               <Link href="/calendar" className="rounded-2xl border border-white/10 bg-[#111214] p-4 text-sm font-semibold text-amber-200">Weekly training calendar & session logs →</Link>
               <Link href="/benchmarks" className="rounded-2xl border border-white/10 bg-[#111214] p-4 text-sm font-semibold text-amber-200">Benchmarks dashboard →</Link>
             </div>

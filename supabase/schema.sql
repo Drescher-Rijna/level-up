@@ -200,7 +200,7 @@ begin
     (v_user_id, 2, 2, 'Floating on your tricks', 'Build a lighter, more effortless feeling in your tricks.'),
     (v_user_id, 3, 3, 'Keep the board in front of you', 'Practice staying connected to the board through the full trick.'),
     (v_user_id, 4, 4, 'Separate shoulders and hips', 'Develop independent control of your shoulders and hips.'),
-    (v_user_id, 5, 5, 'Pinching your truck', 'Practice a consistent, controlled pinch on the truck.'),
+    (v_user_id, 5, 5, 'Locking in grinds', 'Practice a consistent, controlled pinch on the truck.'),
     (v_user_id, 6, 6, 'Keeping speed on exit', 'Carry useful speed through the landing and exit.'),
     (v_user_id, 7, 7, 'Doing tricks with speed', 'Build confidence and control while practicing with speed.'),
     (v_user_id, 8, 8, 'New principle 8', 'Rename this placeholder before starting it.'),
@@ -524,7 +524,7 @@ values
   ('floating-on-your-tricks', 'Floating on your tricks', 'Build a lighter, more effortless feeling in your tricks.', 100, 2000, 2),
   ('keep-the-board-in-front-of-you', 'Keep the board in front of you', 'Practice staying connected to the board through the full trick.', 100, 2000, 3),
   ('separate-shoulders-and-hips', 'Separate shoulders and hips', 'Develop independent control of your shoulders and hips.', 100, 2000, 4),
-  ('pinching-your-truck', 'Pinching your truck', 'Practice a consistent, controlled pinch on the truck.', 100, 2000, 5),
+  ('pinching-your-truck', 'Locking in grinds', 'Practice a consistent, controlled pinch on the truck.', 100, 2000, 5),
   ('keeping-speed-on-exit', 'Keeping speed on exit', 'Carry useful speed through the landing and exit.', 100, 2000, 6),
   ('doing-tricks-with-speed', 'Doing tricks with speed', 'Build confidence and control while practicing with speed.', 100, 2000, 7)
 on conflict (id) do update set

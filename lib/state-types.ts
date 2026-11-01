@@ -86,6 +86,80 @@ export type WorkoutSession = {
   exercises: WorkoutExerciseLog[];
 };
 
+export type BlockSessionKind = "standard" | "speed" | "free" | "rest";
+
+export type SkateBlock = {
+  id: string;
+  seasonQuestId: string | null;
+  startDate: string;
+  reviewDate: string;
+  benchmarkWeeks: number[];
+  isLocked: boolean;
+  focusCue: string;
+  benchmarkSpot: string;
+  gymDays: number[];
+  reviewedAt: string | null;
+};
+
+export type BlockProjectRole = "main" | "nemesis" | "warmup" | "vehicle" | "saturday";
+export type BlockProjectMetric = "clean_of_10" | "distance" | "rung";
+
+export type BlockProject = {
+  id: string;
+  sortOrder: number;
+  name: string;
+  role: BlockProjectRole;
+  location: string;
+  trains: string;
+  metric: BlockProjectMetric;
+};
+
+export type BenchmarkAttempt = "clean" | "miss";
+
+export type BlockBenchmarkRun = {
+  id: string;
+  projectId: string;
+  week: number;
+  testedOn: string;
+  attempts: BenchmarkAttempt[] | null;
+  value: number | null;
+  conditions: string;
+  videoUrl: string;
+};
+
+export type BlockDayOverride = {
+  date: string;
+  sessionKind: "free" | "rest";
+  reason: string;
+};
+
+export type ParkingLotIdea = {
+  id: string;
+  idea: string;
+  createdAt: string;
+  decision: "adopted" | "rejected" | null;
+};
+
+export type BlockRecoveryCheck = {
+  sessionDate: string;
+  lowerBackSoreness: number;
+  hasPain: boolean;
+  note: string;
+};
+
+export type SkateBlockSnapshot =
+  | { status: "unavailable" }
+  | { status: "not-started" }
+  | {
+      status: "ready";
+      block: SkateBlock;
+      projects: BlockProject[];
+      benchmarkRuns: BlockBenchmarkRun[];
+      dayOverrides: BlockDayOverride[];
+      parkingLot: ParkingLotIdea[];
+      recoveryChecks: BlockRecoveryCheck[];
+    };
+
 export type AppState = {
   displayName: string;
   skatingStartDate: string;
@@ -104,4 +178,5 @@ export type AppState = {
   accumulatedFocusMinutes: number;
   skatePracticeLogs: SkatePracticeLog[];
   benchmarkLogs: BenchmarkLog[];
+  skateBlock: SkateBlockSnapshot;
 };

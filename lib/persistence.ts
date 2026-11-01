@@ -7,8 +7,14 @@ import {
 import type {
   AppState,
   BenchmarkLog,
+  BlockBenchmarkRun,
+  BlockDayOverride,
+  BlockProject,
+  BlockRecoveryCheck,
+  ParkingLotIdea,
   QuestTemplate,
   SeasonQuest,
+  SkateBlockSnapshot,
   SkatePracticeLog,
   TrainingCheckIn,
   WorkoutSession,
@@ -28,6 +34,7 @@ export async function loadUserState(user: User): Promise<Partial<AppState>> {
   }
 
   const today = getCurrentDateKey();
+  const skateBlockRequest = loadSkateBlock(user);
   const results = await Promise.all([
       supabase.from("profiles").select("display_name, skating_start_date").eq("id", user.id).maybeSingle(),
       supabase.from("tasks").select("id, name, description, stat, xp, active, frequency").eq("active", true).order("created_at"),
@@ -51,6 +58,7 @@ export async function loadUserState(user: User): Promise<Partial<AppState>> {
     throw new Error(firstError.error.message);
   }
 
+  const skateBlock = await skateBlockRequest;
   const completions = completionsResult.data ?? [];
   const tasks = (tasksResult.data?.length ? tasksResult.data : DEFAULT_TASKS) as Task[];
   const statXp = Object.fromEntries(
@@ -152,7 +160,165 @@ export async function loadUserState(user: User): Promise<Partial<AppState>> {
       notes: log.notes,
       testedAt: log.tested_at,
     })),
+    skateBlock,
   };
+}
+
+// PostgREST and Postgres codes for a table that has not been created yet.
+const MISSING_TABLE_ERROR_CODES = ["PGRST205", "42P01"];
+
+// Loads the most recent block; reports "unavailable" until supabase/skate-block.sql has been run.
+export async function loadSkateBlock(user: User): Promise<SkateBlockSnapshot> {
+  if (!supabase) throw new Error("Supabase is not configured.");
+
+  const { data: block, error: blockError } = await supabase
+    .from("skate_blocks")
+    .select("id, season_quest_id, start_date, review_date, benchmark_weeks, is_locked, focus_cue, benchmark_spot, gym_days, reviewed_at")
+    .eq("user_id", user.id)
+    .order("start_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (blockError) {
+    if (MISSING_TABLE_ERROR_CODES.includes(blockError.code)) return { status: "unavailable" };
+    throw new Error(blockError.message);
+  }
+  if (!block) return { status: "not-started" };
+
+  const results = await Promise.all([
+    supabase.from("block_projects").select("id, sort_order, name, role, location, trains, metric").eq("block_id", block.id).order("sort_order"),
+    supabase.from("block_benchmark_runs").select("id, project_id, week, tested_on, attempts, value, conditions, video_url, block_projects!inner(block_id)").eq("block_projects.block_id", block.id).order("created_at"),
+    supabase.from("block_day_overrides").select("override_date, session_kind, reason").eq("block_id", block.id),
+    supabase.from("block_parking_lot").select("id, idea, created_at, decision").eq("block_id", block.id).order("created_at"),
+    supabase.from("block_recovery_checks").select("session_date, lower_back_soreness, has_pain, note").eq("block_id", block.id).order("session_date"),
+  ]);
+  const [projectsResult, benchmarkRunsResult, dayOverridesResult, parkingLotResult, recoveryChecksResult] = results;
+  const firstError = results.find((result) => result.error);
+  if (firstError?.error) throw new Error(firstError.error.message);
+
+  return {
+    status: "ready",
+    block: {
+      id: block.id,
+      seasonQuestId: block.season_quest_id,
+      startDate: block.start_date,
+      reviewDate: block.review_date,
+      benchmarkWeeks: block.benchmark_weeks,
+      isLocked: block.is_locked,
+      focusCue: block.focus_cue,
+      benchmarkSpot: block.benchmark_spot,
+      gymDays: block.gym_days,
+      reviewedAt: block.reviewed_at,
+    },
+    projects: (projectsResult.data ?? []).map((project): BlockProject => ({
+      id: project.id,
+      sortOrder: project.sort_order,
+      name: project.name,
+      role: project.role,
+      location: project.location,
+      trains: project.trains,
+      metric: project.metric,
+    })),
+    benchmarkRuns: (benchmarkRunsResult.data ?? []).map((run): BlockBenchmarkRun => ({
+      id: run.id,
+      projectId: run.project_id,
+      week: run.week,
+      testedOn: run.tested_on,
+      attempts: run.attempts,
+      value: run.value === null ? null : Number(run.value),
+      conditions: run.conditions,
+      videoUrl: run.video_url,
+    })),
+    dayOverrides: (dayOverridesResult.data ?? []).map((override): BlockDayOverride => ({
+      date: override.override_date,
+      sessionKind: override.session_kind,
+      reason: override.reason,
+    })),
+    parkingLot: (parkingLotResult.data ?? []).map((idea): ParkingLotIdea => ({
+      id: idea.id,
+      idea: idea.idea,
+      createdAt: idea.created_at,
+      decision: idea.decision,
+    })),
+    recoveryChecks: (recoveryChecksResult.data ?? []).map((check): BlockRecoveryCheck => ({
+      sessionDate: check.session_date,
+      lowerBackSoreness: check.lower_back_soreness,
+      hasPain: check.has_pain,
+      note: check.note,
+    })),
+  };
+}
+
+export async function createSkateBlock(block: {
+  startDate: string;
+  focusCue: string;
+  benchmarkSpot: string;
+  gymDays: number[];
+}) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const { error } = await supabase.rpc("create_skate_block", {
+    p_start_date: block.startDate,
+    p_focus_cue: block.focusCue,
+    p_benchmark_spot: block.benchmarkSpot,
+    p_gym_days: block.gymDays,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function logBlockBenchmark(run: Omit<BlockBenchmarkRun, "id">) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const { error } = await supabase.rpc("log_block_benchmark", {
+    p_project_id: run.projectId,
+    p_week: run.week,
+    p_tested_on: run.testedOn,
+    p_attempts: run.attempts,
+    p_value: run.value,
+    p_conditions: run.conditions,
+    p_video_url: run.videoUrl,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function setBlockDayOverride(
+  blockId: string,
+  date: string,
+  sessionKind: BlockDayOverride["sessionKind"] | null,
+  reason: string,
+) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const { error } = await supabase.rpc("set_block_day_override", {
+    p_block_id: blockId,
+    p_override_date: date,
+    p_session_kind: sessionKind,
+    p_reason: reason,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function addParkingLotIdea(blockId: string, idea: string) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const { error } = await supabase.rpc("add_parking_lot_idea", { p_block_id: blockId, p_idea: idea });
+  if (error) throw new Error(error.message);
+}
+
+export async function logBlockRecoveryCheck(blockId: string, check: BlockRecoveryCheck) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const { error } = await supabase.rpc("log_block_recovery_check", {
+    p_block_id: blockId,
+    p_session_date: check.sessionDate,
+    p_lower_back_soreness: check.lowerBackSoreness,
+    p_has_pain: check.hasPain,
+    p_note: check.note,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export async function completeBlockReview(blockId: string, adoptedIdeaId: string | null) {
+  if (!supabase) throw new Error("Supabase is not configured.");
+  const { error } = await supabase.rpc("complete_block_review", {
+    p_block_id: blockId,
+    p_adopted_idea_id: adoptedIdeaId,
+  });
+  if (error) throw new Error(error.message);
 }
 
 export async function ensureUserProfile(user: User, displayName: string, skatingStartDate: string) {
