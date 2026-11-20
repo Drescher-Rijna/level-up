@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Archivo, DM_Sans } from "next/font/google";
+import { Footprints } from "lucide-react";
 import "./globals.css";
 
 const displayFont = Archivo({
@@ -36,7 +37,14 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       lang="en"
       className={`${displayFont.variable} ${bodyFont.variable} h-full antialiased`}
     >
-      <body className="min-h-full bg-[#0b0c0e] text-white">{children}</body>
+      <body className="min-h-full bg-[#0b0c0e] text-white">
+        {children}
+        <div className="progression-landscape-notice" role="status">
+          <Footprints size={24} aria-hidden="true" />
+          <strong>Portrait mode required</strong>
+          <span>Rotate your device back to portrait to continue.</span>
+        </div>
+      </body>
     </html>
   );
 }

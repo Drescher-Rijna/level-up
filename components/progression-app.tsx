@@ -726,11 +726,6 @@ export default function ProgressionApp({ showDashboardHome = false }: { showDash
           <span>{toast}</span>
         </div>
       )}
-      <div className="progression-landscape-notice" aria-hidden="true">
-        <Footprints size={24} />
-        <strong>Flip back to portrait</strong>
-        <span>This session is built for one-handed park use.</span>
-      </div>
     </div>
   );
 }

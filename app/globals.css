@@ -37,6 +37,14 @@ input {
   font: inherit;
 }
 
+:is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="hidden"]),
+  textarea,
+  select
+) {
+  font-size: 16px;
+}
+
 button,
 a {
   -webkit-tap-highlight-color: transparent;
@@ -2931,7 +2939,12 @@ a {
   to { transform: rotate(360deg); }
 }
 
-@media (orientation: landscape) and (max-height: 520px) {
+@media (orientation: landscape) and (max-width: 1024px) {
+  html,
+  body {
+    overflow: hidden;
+  }
+
   .progression-landscape-notice {
     position: fixed;
     z-index: 90;

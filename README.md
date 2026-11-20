@@ -22,7 +22,7 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 ## Skate progression app
 
-The home screen and secondary screens use the dark, lime-accented mobile design and shared bottom navigation. The home screen shows the level/XP bar and only five daily checklist items: Mobility, Recovery, Japanese, Mind, and Character. Skate XP is awarded from logged skate sessions and skate progression benchmarks; workout XP is awarded when a workout is completed. Recovery check-ins remain available from the Log tab. The trick progression and cycle setup live at `/progress`; the baseline assessment is temporarily bypassed so the screens can be explored.
+The home screen and secondary screens use the dark, lime-accented mobile design and shared bottom navigation. Text fields use at least 16px text to prevent iPhone focus zoom. The PWA requests portrait orientation, and mobile landscape shows a rotate-back screen. The home screen shows the level/XP bar and only five daily checklist items: Mobility, Recovery, Japanese, Mind, and Character. Skate XP is awarded from logged skate sessions and skate progression benchmarks; workout XP is awarded when a workout is completed. Recovery check-ins remain available from the Log tab. The trick progression and cycle setup live at `/progress`; the baseline assessment is temporarily bypassed so the screens can be explored.
 
 Add these values to `.env.local` to enable account sign-in and cloud sync:
 
