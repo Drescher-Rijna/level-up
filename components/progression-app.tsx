@@ -24,10 +24,13 @@ import {
 import Link from "next/link";
 import type { User } from "@supabase/supabase-js";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import BaselineAssessment from "@/components/baseline-assessment";
+import type { BaselineSubmission } from "@/components/baseline-assessment";
 import DashboardHome from "@/components/dashboard-home";
 import {
   addVaultEntry,
   completeDashboardTask as saveDashboardTaskCompletion,
+  completeProgressionBaseline,
   createTrainingCycle,
   deleteVaultEntry,
   eligibleProgress,
@@ -275,6 +278,13 @@ export default function ProgressionApp({ showDashboardHome = false }: { showDash
     },
     [refreshSnapshot, user],
   );
+
+  async function submitBaseline(input: BaselineSubmission) {
+    await runAction(
+      () => completeProgressionBaseline(input),
+      "Baseline saved. Pick Cycle 1.",
+    );
+  }
 
   async function signOut() {
     if (!supabaseClient) return;
@@ -567,6 +577,18 @@ export default function ProgressionApp({ showDashboardHome = false }: { showDash
 
   if (loading || !snapshot) {
     return <LoadingScreen />;
+  }
+
+  if (!snapshot.baseline) {
+    return (
+      <BaselineAssessment
+        snapshot={snapshot}
+        busy={busy}
+        error={errorMessage}
+        onDismissError={() => setErrorMessage("")}
+        onSubmit={submitBaseline}
+      />
+    );
   }
 
   const cycleIsExpired = Boolean(snapshot.cycle && !activeCycle);

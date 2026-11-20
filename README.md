@@ -22,7 +22,7 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 ## Skate progression app
 
-The home screen and secondary screens use the dark, lime-accented mobile design and shared bottom navigation. Text fields use at least 16px text to prevent iPhone focus zoom. The PWA requests portrait orientation, and mobile landscape shows a rotate-back screen. The home screen shows the level/XP bar and only five daily checklist items: Mobility, Recovery, Japanese, Mind, and Character. Skate XP is awarded from logged skate sessions and skate progression benchmarks; workout XP is awarded when a workout is completed. Recovery check-ins remain available from the Log tab. The trick progression and cycle setup live at `/progress`; the baseline assessment is temporarily bypassed so the screens can be explored.
+The home screen and secondary screens use the dark, lime-accented mobile design and shared bottom navigation. Text fields use at least 16px text to prevent iPhone focus zoom. The PWA requests portrait orientation, and mobile landscape shows a rotate-back screen. The home screen shows the level/XP bar and only five daily checklist items: Mobility, Recovery, Japanese, Mind, and Character. Skate XP is awarded from logged skate sessions and skate progression benchmarks; workout XP is awarded when a workout is completed. Recovery check-ins remain available from the Log tab. The trick progression and cycle setup live at `/progress`; first-time skaters complete a baseline assessment before setting up their first cycle.
 
 Add these values to `.env.local` to enable account sign-in and cloud sync:
 
@@ -31,7 +31,7 @@ NEXT_PUBLIC_SUPABASE_URL=your-supabase-project-url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 ```
 
-Apply or re-run [`supabase/skate-progression.sql`](./supabase/skate-progression.sql) in the Supabase SQL Editor after updating the progression app. It creates the 84-trick catalog, signup seeding trigger, user progress tables, baseline-assessment and training-cycle RPCs, and Row Level Security policies. The migration also backfills progression rows for existing Auth users. New accounts receive 504 trick-tier progress rows and seven micro-skills. The four-step baseline is temporarily bypassed in the UI so the progression screens can be explored; the baseline schema and RPC remain available. Baseline mastery backfills all lower tiers; the summary calculates its starting level at 100 XP per progression score point using the existing level thresholds.
+Apply or re-run [`supabase/skate-progression.sql`](./supabase/skate-progression.sql) in the Supabase SQL Editor after updating the progression app. It creates the 84-trick catalog, signup seeding trigger, user progress tables, baseline-assessment and training-cycle RPCs, and Row Level Security policies. The migration also backfills progression rows for existing Auth users. New accounts receive 504 trick-tier progress rows and seven micro-skills. The four-step baseline appears for accounts without a completed baseline; baseline mastery backfills all lower tiers, and the summary calculates its starting level at 100 XP per progression score point using the existing level thresholds.
 
 The browser and Next.js Proxy use the Supabase SSR package to keep Auth cookies refreshed. The PWA manifest requests portrait orientation; a landscape reminder is shown on short landscape screens where browsers cannot enforce orientation.
 
