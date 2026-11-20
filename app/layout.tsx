@@ -13,8 +13,21 @@ const bodyFont = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Skate Mastery",
-  description: "Minimal RPG-inspired skateboarding progression dashboard",
+  title: "Skate / Progress",
+  description: "A five-year skateboarding progression and motor-learning companion.",
+  applicationName: "Skate / Progress",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Skate / Progress",
+  },
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover" as const,
+  themeColor: "#111311",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

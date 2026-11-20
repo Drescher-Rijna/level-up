@@ -2,36 +2,24 @@
 
 import { useState } from "react";
 import type { FormEvent } from "react";
-import type { SeasonQuest, SkatePracticeLog, TrainingCheckIn, WorkoutSession } from "@/lib/state-types";
+import type { SkatePracticeLog } from "@/lib/state-types";
 import { getCurrentDateKey } from "@/lib/game";
 import { TRAINING_WEEK } from "@/lib/training-program";
 
-function getSessionDate(session: WorkoutSession) {
-  const date = new Date(session.completedAt);
-  return getCurrentDateKey(date);
-}
-
 export default function TrainingCalendar({
   practiceLogs,
-  checkIns,
-  workoutSessions,
   totalSkateHours,
-  activeQuest,
   todayKneeScore,
   onLogPractice,
 }: {
   practiceLogs: SkatePracticeLog[];
-  checkIns: TrainingCheckIn[];
-  workoutSessions: WorkoutSession[];
   totalSkateHours: number;
-  activeQuest?: SeasonQuest;
   todayKneeScore?: number;
   onLogPractice: (entry: Omit<SkatePracticeLog, "id">) => Promise<void>;
 }) {
   const today = getCurrentDateKey();
   const [sessionDate, setSessionDate] = useState(today);
   const [skateMinutes, setSkateMinutes] = useState("90");
-  const [focusedMinutes, setFocusedMinutes] = useState("0");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -42,22 +30,11 @@ export default function TrainingCalendar({
     date.setDate(weekStart.getDate() + index);
     return getCurrentDateKey(date);
   });
-  const checkInByDate = new Map(checkIns.map((entry) => [entry.date, entry]));
-
   async function submitPractice(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const skateDuration = Number(skateMinutes);
-    const focusedDuration = Number(focusedMinutes);
     if (!Number.isInteger(skateDuration) || skateDuration <= 0) {
       setMessage("Enter skate minutes as a positive whole number.");
-      return;
-    }
-    if (!Number.isInteger(focusedDuration) || focusedDuration < 0 || focusedDuration > skateDuration) {
-      setMessage("Focused minutes must be a whole number from zero through skate minutes.");
-      return;
-    }
-    if (focusedDuration > 0 && !activeQuest) {
-      setMessage("Start the next quest before logging focused practice.");
       return;
     }
     if (sessionDate === today && (todayKneeScore ?? 5) <= 2) {
@@ -71,12 +48,11 @@ export default function TrainingCalendar({
       await onLogPractice({
         sessionDate,
         skateMinutes: skateDuration,
-        focusedMinutes: focusedDuration,
+        focusedMinutes: 0,
         notes: notes.trim(),
       });
       setMessage("Skate session saved.");
       setSkateMinutes("90");
-      setFocusedMinutes("0");
       setNotes("");
     } catch (error) {
       setMessage((error as Error).message);
@@ -101,10 +77,6 @@ export default function TrainingCalendar({
           {TRAINING_WEEK.map((day, index) => {
             const date = dateKeys[index];
             const logs = practiceLogs.filter((log) => log.sessionDate === date);
-            const checkIn = checkInByDate.get(date);
-            const workoutDone = Boolean(checkIn?.workoutCompleted || workoutSessions.some((session) => getSessionDate(session) === date));
-            const reconDone = Boolean(checkIn?.pmReconCompleted);
-            const skated = logs.length > 0 || Boolean(checkIn?.skated);
             const totalMinutes = logs.reduce((sum, log) => sum + log.skateMinutes, 0);
             return (
               <article key={date} className={`rounded-2xl border p-4 ${date === today ? "border-amber-300/30 bg-amber-300/5" : "border-white/10 bg-black/15"}`}>
@@ -120,11 +92,6 @@ export default function TrainingCalendar({
                 {day.recon && <p className="mt-3 text-sm text-slate-300">{day.recon}</p>}
                 {day.mission && <p className="mt-3 text-sm leading-6 text-slate-300">{day.mission}</p>}
                 {day.break && <p className="mt-2 text-sm text-amber-100">Break: {day.break}</p>}
-                <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs">
-                  <span className={skated ? "text-emerald-300" : "text-slate-500"}>{skated ? "☑" : "☐"} Skated</span>
-                  <span className={workoutDone ? "text-emerald-300" : "text-slate-500"}>{workoutDone ? "☑" : "☐"} Workout completed</span>
-                  <span className={reconDone ? "text-emerald-300" : "text-slate-500"}>{reconDone ? "☑" : "☐"} PM recon stretch</span>
-                </div>
               </article>
             );
           })}
@@ -133,9 +100,9 @@ export default function TrainingCalendar({
 
       <section className="rounded-3xl border border-white/10 bg-[#111214] p-5">
         <p className="text-xs uppercase tracking-[0.3em] text-amber-300">Session log</p>
-        <h2 className="mt-2 text-xl font-bold text-white">Log skate minutes & focused practice</h2>
+        <h2 className="mt-2 text-xl font-bold text-white">Log skate time</h2>
         <p className="mt-1 text-sm text-slate-300">
-          Focused time is assigned to the active 100-hour quest. Session overage carries forward to the next season.
+          Skate XP is credited from the logged session. Use Skate / Progress to log active-cycle work and micro-skill time.
         </p>
         <form className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={(event) => void submitPractice(event)}>
           <label className="text-sm text-slate-300">
@@ -145,10 +112,6 @@ export default function TrainingCalendar({
           <label className="text-sm text-slate-300">
             Skate minutes
             <input type="number" min={1} step={1} value={skateMinutes} onChange={(event) => setSkateMinutes(event.target.value)} required className="mt-1 block w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2 text-base text-white" />
-          </label>
-          <label className="text-sm text-slate-300">
-            Focused minutes
-            <input type="number" min={0} step={1} max={skateMinutes} value={focusedMinutes} onChange={(event) => setFocusedMinutes(event.target.value)} required className="mt-1 block w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2 text-base text-white" />
           </label>
           <label className="text-sm text-slate-300">
             Session notes
@@ -168,7 +131,6 @@ export default function TrainingCalendar({
               {practiceLogs.slice(0, 12).map((log) => (
                 <li key={log.id} className="flex flex-wrap justify-between gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm">
                   <span className="text-white">{log.sessionDate} · {(log.skateMinutes / 60).toFixed(1)} skate hours</span>
-                  <span className="text-amber-200">{(log.focusedMinutes / 60).toFixed(1)} focused hours</span>
                   {log.notes && <span className="w-full text-slate-400">{log.notes}</span>}
                 </li>
               ))}

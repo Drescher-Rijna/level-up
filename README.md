@@ -20,11 +20,26 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Skate progression app
+
+The home screen and secondary screens use the dark, lime-accented mobile design and shared bottom navigation. The home screen shows the level/XP bar and only five daily checklist items: Mobility, Recovery, Japanese, Mind, and Character. Skate XP is awarded from logged skate sessions and skate progression benchmarks; workout XP is awarded when a workout is completed. Recovery check-ins remain available from the Log tab. The trick progression and cycle setup live at `/progress`; the baseline assessment is temporarily bypassed so the screens can be explored.
+
+Add these values to `.env.local` to enable account sign-in and cloud sync:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=your-supabase-project-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+```
+
+Apply or re-run [`supabase/skate-progression.sql`](./supabase/skate-progression.sql) in the Supabase SQL Editor after updating the progression app. It creates the 84-trick catalog, signup seeding trigger, user progress tables, baseline-assessment and training-cycle RPCs, and Row Level Security policies. The migration also backfills progression rows for existing Auth users. New accounts receive 504 trick-tier progress rows and seven micro-skills. The four-step baseline is temporarily bypassed in the UI so the progression screens can be explored; the baseline schema and RPC remain available. Baseline mastery backfills all lower tiers; the summary calculates its starting level at 100 XP per progression score point using the existing level thresholds.
+
+The browser and Next.js Proxy use the Supabase SSR package to keep Auth cookies refreshed. The PWA manifest requests portrait orientation; a landscape reminder is shown on short landscape screens where browsers cannot enforce orientation.
+
 ## Supabase schema
 
-Apply [`supabase/schema.sql`](./supabase/schema.sql) in the Supabase SQL Editor when setting up or updating the database. Re-run it to add the season program, dated skate-practice and focus logs, benchmark history, and additional check-in fields. The update is additive: existing quest, skate-session, check-in, and workout rows are retained. Existing active quest rows are marked as legacy history; their hours are not copied into the new 1,000-hour program.
+Apply [`supabase/schema.sql`](./supabase/schema.sql) in the Supabase SQL Editor when setting up or updating the database. Re-run it to add the season program, dated skate-practice and focus logs, benchmark history, and additional check-in fields. The update is additive: existing quest, skate-session, check-in, and workout rows are retained. The old quest-management and strength/flexibility benchmark screens are no longer exposed; historical rows remain in the database.
 
-The ten season principles are initialized per account. The seven existing principle names are retained, and the remaining three start as editable placeholders. Reordering and renaming are available only for unstarted quests; an active quest and completed seasons stay fixed. Focused time is recorded in minutes with each dated skate session and allocated to the active season, carrying session overage into the next season.
+The ten season principles remain in the schema for historical data and existing benchmark/workout grouping. New skate cycles use the micro-skill catalog instead.
 
 ## Learn More
 

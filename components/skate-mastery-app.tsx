@@ -4,13 +4,13 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import {
-  DEFAULT_MILESTONES,
   DEFAULT_QUEST,
   DEFAULT_STAT_XP,
   DEFAULT_TASKS,
   DEFAULT_TOTAL_SKATE_HOURS,
   DEFAULT_TOTAL_XP,
   DEFAULT_USER_PROFILE,
+  DAILY_CHECKLIST_TASK_IDS,
   STAT_META,
   type StatKey,
   type Task,
@@ -20,19 +20,15 @@ import {
   getLevelData,
   getSkatingYear,
 } from "@/lib/game";
-import { BENCHMARK_GOALS, describeBenchmarkAlert, getBenchmarkAlerts } from "@/lib/training-program";
 import type {
   AppState,
-  BenchmarkLog,
   QuestTemplate,
-  SeasonQuest,
   SkatePracticeLog,
   TrainingCheckIn,
   WorkoutSession,
 } from "@/lib/state-types";
+import MainNavigation from "@/components/main-navigation";
 import DailyTrainingCheckIn from "@/components/daily-training-check-in";
-import BenchmarksDashboard from "@/components/benchmarks-dashboard";
-import SeasonProgram from "@/components/season-program";
 import TrainingCalendar from "@/components/training-calendar";
 import WorkoutTracker from "@/components/workout-tracker";
 import SkateBlockPlanner, { SkateBlockTodayCard, type SkateBlockActions } from "@/components/skate-block";
@@ -47,17 +43,13 @@ import {
   logBlockRecoveryCheck,
   setBlockDayOverride,
   loadUserState,
-  logBenchmark,
   logSkatePractice,
-  renameTrainingQuest,
-  reorderTrainingQuests,
   saveTrainingCheckIn,
   saveWorkoutSession,
-  startTrainingQuest,
 } from "@/lib/persistence";
 import { getSupabaseClient, getSupabaseConfigurationError } from "@/lib/supabase";
 
-type AppView = "home" | "stats" | "workouts" | "quests" | "settings" | "calendar" | "benchmarks" | "block";
+type AppView = "home" | "stats" | "workouts" | "settings" | "calendar" | "block";
 
 const DEFAULT_QUEST_TEMPLATES: QuestTemplate[] = [
   { id: "back-seat-weight-distribution", name: "Back seat weight distribution", description: "Keep your weight centered and controlled through the back seat.", targetHours: 100, completionBonusXp: 2000 },
@@ -242,15 +234,6 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
   const yesterday = getCurrentDateKey(yesterdayDate);
   const checkInsByDate = new Map(appState.trainingCheckIns.map((checkIn) => [checkIn.date, checkIn]));
   const todayCheckIn = checkInsByDate.get(today);
-  const todayDailyCheckIn = todayCheckIn
-    ? {
-        ...todayCheckIn,
-        skated: todayCheckIn.skated || appState.skatePracticeLogs.some((log) => log.sessionDate === today),
-        workoutCompleted: todayCheckIn.workoutCompleted || appState.workoutSessions.some(
-          (session) => getCurrentDateKey(new Date(session.completedAt)) === today,
-        ),
-      }
-    : undefined;
   const kneeRecoveryFlag = Boolean(
     todayCheckIn &&
     todayCheckIn.kneeScore <= 2 &&
@@ -289,15 +272,12 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
       }
     : null;
   const strengthTask = appState.tasks.find((task) => task.id === "strength");
+  const skateTask = appState.tasks.find((task) => task.id === "skate");
   const activeSeasonQuest = appState.seasonQuests.find((quest) => quest.status === "active");
   const nextSeasonQuest = appState.seasonQuests.find((quest) => quest.status === "planned");
-  const benchmarkSeasonQuest = activeSeasonQuest ??
-    [...appState.seasonQuests].reverse().find((quest) => quest.status === "completed");
-  const benchmarkAlerts = getBenchmarkAlerts(appState.seasonQuests, appState.benchmarkLogs);
-
   if (!mounted) {
     return (
-      <div className="min-h-screen bg-[#0b0b0c] px-4 py-6 text-slate-100">
+      <div className="sm-app min-h-screen px-4 py-6 text-slate-100">
         <div className="mx-auto max-w-6xl animate-pulse space-y-6">
           <div className="h-24 rounded-3xl bg-white/5" />
           <div className="h-80 rounded-3xl bg-white/5" />
@@ -308,7 +288,7 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
 
   if (getSupabaseConfigurationError()) {
     return (
-      <div className="min-h-screen bg-[#0b0b0c] px-4 py-6 text-slate-100">
+      <div className="sm-app min-h-screen px-4 py-6 text-slate-100">
         <div className="mx-auto max-w-xl rounded-3xl border border-red-500/30 bg-red-500/10 p-6">
           <h1 className="text-2xl font-black text-white">Supabase configuration needed</h1>
           <p className="mt-3 text-sm leading-6 text-red-100">
@@ -321,7 +301,7 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#0b0b0c] px-4 py-6 text-slate-100">
+      <div className="sm-app min-h-screen px-4 py-6 text-slate-100">
         <div className="mx-auto max-w-md rounded-3xl border border-white/10 bg-[#111214] p-6 shadow-xl shadow-black/20">
           <p className="text-xs uppercase tracking-[0.38em] text-amber-300">Skate Mastery</p>
           <h1 className="mt-3 text-3xl font-black text-white">
@@ -414,7 +394,7 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
 
   if (remoteStateError) {
     return (
-      <div className="min-h-screen bg-[#0b0b0c] px-4 py-6 text-slate-100">
+      <div className="sm-app min-h-screen px-4 py-6 text-slate-100">
         <div className="mx-auto max-w-xl rounded-3xl border border-red-500/30 bg-red-500/10 p-6">
           <p className="text-xs uppercase tracking-[0.32em] text-red-200">Supabase sync error</p>
           <h1 className="mt-3 text-2xl font-black text-white">Your account is signed in, but data is not available yet.</h1>
@@ -497,61 +477,6 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
     setAppState((current) => ({ ...current, ...remoteState }));
   }
 
-  async function saveQuestOrder(orderedIds: string[]) {
-    if (user) {
-      await reorderTrainingQuests(orderedIds);
-      await refreshTrainingState();
-      return;
-    }
-
-    const orderedQuests = orderedIds.map((id, index) => {
-      const quest = appState.seasonQuests.find((item) => item.id === id);
-      if (!quest) throw new Error("Could not find a season quest to reorder.");
-      return { ...quest, sortOrder: index + 1 };
-    });
-    setAppState((current) => ({ ...current, seasonQuests: orderedQuests }));
-  }
-
-  async function saveQuestName(quest: SeasonQuest, name: string, description: string) {
-    if (!name.trim()) throw new Error("Quest name cannot be empty.");
-    if (user) {
-      await renameTrainingQuest(quest.id, name, description);
-      await refreshTrainingState();
-      return;
-    }
-    setAppState((current) => ({
-      ...current,
-      seasonQuests: current.seasonQuests.map((item) =>
-        item.id === quest.id && item.status === "planned"
-          ? { ...item, name: name.trim(), description }
-          : item,
-      ),
-    }));
-  }
-
-  async function beginSeasonQuest(quest: SeasonQuest) {
-    if (user) {
-      await startTrainingQuest(quest.id);
-      await refreshTrainingState();
-      return;
-    }
-    if (appState.seasonQuests.some((item) => item.status === "active")) {
-      throw new Error("Finish the active quest before starting another.");
-    }
-    const firstPlanned = [...appState.seasonQuests]
-      .filter((item) => item.status === "planned")
-      .sort((first, second) => first.sortOrder - second.sortOrder)[0];
-    if (firstPlanned?.id !== quest.id) throw new Error("Start the next quest in the current order.");
-    setAppState((current) => ({
-      ...current,
-      seasonQuests: current.seasonQuests.map((item) =>
-        item.id === quest.id
-          ? { ...item, status: "active", startedAt: getCurrentDateKey() }
-          : item,
-      ),
-    }));
-  }
-
   async function savePracticeLog(entry: Omit<SkatePracticeLog, "id">) {
     const sessionCheckIn = appState.trainingCheckIns.find((checkIn) => checkIn.date === entry.sessionDate);
     if (entry.sessionDate === getCurrentDateKey() && (sessionCheckIn?.kneeScore ?? 5) <= 2) {
@@ -560,6 +485,11 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
     if (user) {
       await logSkatePractice(entry);
       await refreshTrainingState();
+      if (!skateTask) {
+        setAuthMessage("Skate XP is not configured. Check the Skate task in your Supabase setup.");
+      } else {
+        await awardTaskXp(skateTask);
+      }
       return;
     }
 
@@ -599,31 +529,11 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
       skatePracticeLogs: [practiceLog, ...current.skatePracticeLogs],
       totalSkateHours: current.totalSkateHours + entry.skateMinutes / 60,
     }));
-  }
-
-  async function saveBenchmarkResult(entry: {
-    questId: string;
-    metric: string;
-    value: number;
-    notes: string;
-    testedAt: string;
-  }) {
-    const quest = appState.seasonQuests.find((item) => item.id === entry.questId);
-    if (!quest) throw new Error("The benchmark season no longer exists.");
-    if (user) {
-      await logBenchmark({
-        ...entry,
-        seasonOrder: quest.sortOrder,
-      });
-      await refreshTrainingState();
-      return;
+    if (!skateTask) {
+      setAuthMessage("Skate XP is not configured. Check the Skate task in your Supabase setup.");
+    } else {
+      await awardTaskXp(skateTask);
     }
-    const benchmarkLog: BenchmarkLog = {
-      ...entry,
-      id: crypto.randomUUID(),
-      seasonOrder: quest.sortOrder,
-    };
-    setAppState((current) => ({ ...current, benchmarkLogs: [benchmarkLog, ...current.benchmarkLogs] }));
   }
 
   async function completeWorkout(session: WorkoutSession) {
@@ -684,13 +594,6 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
     }
   }
 
-  const navItems = [
-    { label: "Today", href: "/", active: view === "home", icon: <path d="m4 11 8-7 8 7v9h-5v-6H9v6H4z" /> },
-    { label: "Train", href: "/workouts", active: view === "workouts", icon: <path d="M6 7v10M18 7v10M3 10v4M21 10v4M6 12h12" /> },
-    { label: "Quests", href: "/quests", active: view === "quests", icon: <path d="M5 21V4h12l-2.5 4 2.5 4H5" /> },
-    { label: "Me", href: "/settings", active: view === "settings", icon: <><circle cx="12" cy="8" r="4" /><path d="M4 21c1-4 4-6 8-6s7 2 8 6" /></> },
-  ];
-
   return (
     <div className="sm-app min-h-screen text-slate-100">
       <div className="app-content mx-auto">
@@ -710,11 +613,6 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
             </header>
 
             <main className="space-y-6">
-              {benchmarkAlerts.map((alert) => (
-                <Link key={alert.quest.id} href="/benchmarks" className="block rounded-2xl border border-amber-300/40 bg-amber-300/10 p-4 text-amber-100">
-                  {describeBenchmarkAlert(alert)}. {alert.remainingGoals.length} of {BENCHMARK_GOALS.length} tests left: {alert.remainingGoals.map((goal) => goal.name).join(", ")}. Open the dashboard →
-                </Link>
-              ))}
               <SkateBlockTodayCard snapshot={appState.skateBlock} today={today} />
               <section className="app-level-card rounded-3xl border border-white/10 bg-[#15171a] p-5">
                 <div className="flex items-end justify-between gap-3">
@@ -798,19 +696,15 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
                 </div>
               </section>
 
-              <Link href="/quests" className="app-quest-preview">
+              <Link href="/progress" className="app-quest-preview">
                 <div className="app-quest-preview-top">
-                  <span>{activeSeasonQuest ? "Active season quest" : "Mastery program"}</span>
-                  <strong>{Math.floor((appState.accumulatedFocusMinutes / 60000) * 100)}%</strong>
+                  <span>Skate progression</span>
+                  <strong>2-week cycle</strong>
                 </div>
-                <h2>{activeSeasonQuest?.name ?? nextSeasonQuest?.name ?? "1,000-hour journey complete"}</h2>
-                <ProgressBar percent={(appState.accumulatedFocusMinutes / 60000) * 100} />
-                <p>{(appState.accumulatedFocusMinutes / 60).toFixed(1)} / 1,000 focused hours · {activeSeasonQuest ? `${activeSeasonQuest.focusedMinutes / 60} / 100 h in active season` : "Start the next season quest"}</p>
+                <h2>Explore the skill tree</h2>
+                <p>Trick mastery, active micro-skills, and skate sessions.</p>
               </Link>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Link href="/calendar" className="rounded-2xl border border-white/10 bg-[#111214] p-4 text-sm font-semibold text-amber-200">Open weekly training calendar →</Link>
-                <Link href="/benchmarks" className="rounded-2xl border border-white/10 bg-[#111214] p-4 text-sm font-semibold text-amber-200">View benchmarks and testing alerts →</Link>
-              </div>
+              <Link href="/progress" className="block rounded-2xl border border-white/10 bg-[#111214] p-4 text-sm font-semibold text-amber-200">Log a skate session →</Link>
             </main>
           </>
         )}
@@ -824,8 +718,8 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
             <main className="space-y-6">
 
             <DailyTrainingCheckIn
-              key={`${today}-${todayDailyCheckIn?.kneeScore ?? "empty"}-${todayDailyCheckIn?.energyScore ?? "empty"}-${todayDailyCheckIn?.skated ?? false}-${todayDailyCheckIn?.workoutCompleted ?? false}-${todayDailyCheckIn?.pmReconCompleted ?? false}`}
-              checkIn={todayDailyCheckIn}
+              key={`${today}-${todayCheckIn?.kneeScore ?? "empty"}-${todayCheckIn?.energyScore ?? "empty"}-${todayCheckIn?.sleepHours ?? "empty"}-${todayCheckIn?.co2ToleranceSeconds ?? "empty"}`}
+              checkIn={todayCheckIn}
               kneeRecoveryFlag={kneeRecoveryFlag}
               saving={isSavingCheckIn}
               statusMessage={checkInMessage}
@@ -833,17 +727,7 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
               onSave={saveDailyCheckIn}
             />
 
-            <SeasonProgram
-              quests={appState.seasonQuests}
-              accumulatedFocusMinutes={appState.accumulatedFocusMinutes}
-              onReorder={saveQuestOrder}
-              onRename={saveQuestName}
-              onStart={beginSeasonQuest}
-            />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Link href="/calendar" className="rounded-2xl border border-white/10 bg-[#111214] p-4 text-sm font-semibold text-amber-200">Weekly training calendar & session logs →</Link>
-              <Link href="/benchmarks" className="rounded-2xl border border-white/10 bg-[#111214] p-4 text-sm font-semibold text-amber-200">Benchmarks dashboard →</Link>
-            </div>
+            <Link href="/progress" className="block rounded-2xl border border-white/10 bg-[#111214] p-4 text-sm font-semibold text-amber-200">Skate sessions and cycles →</Link>
 
             <section className="rounded-3xl border border-white/10 bg-[#111214] p-5 shadow-xl shadow-black/20">
               <h2 className="text-2xl font-black tracking-tight text-white">Level progression</h2>
@@ -892,27 +776,9 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
             </header>
             <TrainingCalendar
               practiceLogs={appState.skatePracticeLogs}
-              checkIns={appState.trainingCheckIns}
-              workoutSessions={appState.workoutSessions}
               totalSkateHours={appState.totalSkateHours}
-              activeQuest={activeSeasonQuest}
               todayKneeScore={todayCheckIn?.kneeScore}
               onLogPractice={savePracticeLog}
-            />
-          </>
-        )}
-
-        {view === "benchmarks" && (
-          <>
-            <header className="app-page-title">
-              <p className="app-eyebrow">Six-week season tests</p>
-              <h1>Benchmarks</h1>
-            </header>
-            <BenchmarksDashboard
-              quests={appState.seasonQuests}
-              defaultQuest={benchmarkSeasonQuest}
-              logs={appState.benchmarkLogs}
-              onSave={saveBenchmarkResult}
             />
           </>
         )}
@@ -946,53 +812,6 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
             kneeScore={todayCheckIn?.kneeScore}
             onComplete={completeWorkout}
           />
-        )}
-
-        {view === "quests" && (
-          <>
-            <header className="app-page-title">
-              <p className="app-eyebrow">Focused practice</p>
-              <h1>Quests</h1>
-              <p>Reorder unstarted principles; started and completed seasons stay locked in sequence.</p>
-            </header>
-            <main className="space-y-6">
-            <SeasonProgram
-              quests={appState.seasonQuests}
-              accumulatedFocusMinutes={appState.accumulatedFocusMinutes}
-              onReorder={saveQuestOrder}
-              onRename={saveQuestName}
-              onStart={beginSeasonQuest}
-            />
-            <div className="rounded-2xl border border-white/10 bg-[#111214] p-4 text-sm text-slate-300">
-              The previously active quest is retained as legacy history. Its old hours are not included in this new sequence; manually log focused practice in Calendar.
-              {(appState.quest.startedAt || appState.quest.completedHours > 0) && (
-                <p className="mt-2 text-amber-200">Legacy quest: {appState.quest.name} · {appState.quest.completedHours} / {appState.quest.targetHours} historical hours</p>
-              )}
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Link href="/block" className="rounded-2xl border border-white/10 bg-[#111214] p-4 text-sm font-semibold text-amber-200">6-week skate block →</Link>
-              <Link href="/calendar" className="rounded-2xl border border-white/10 bg-[#111214] p-4 text-sm font-semibold text-amber-200">Weekly training calendar & session logs →</Link>
-              <Link href="/benchmarks" className="rounded-2xl border border-white/10 bg-[#111214] p-4 text-sm font-semibold text-amber-200">Benchmarks dashboard →</Link>
-            </div>
-
-            <section className="rounded-3xl border border-white/10 bg-[#111214] p-5 shadow-xl shadow-black/20">
-              <h2 className="text-2xl font-black tracking-tight text-white">Past Quests</h2>
-              <div className="mt-5 space-y-3">
-                {DEFAULT_MILESTONES.slice(0, 3).map((milestone) => (
-                  <div key={milestone.id} className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/15 p-4">
-                    <div>
-                      <p className="text-lg font-bold text-white">{milestone.name}</p>
-                      <p className="text-sm text-slate-300">{milestone.description}</p>
-                    </div>
-                    <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs uppercase tracking-[0.2em] text-slate-300">
-                      {milestone.unlocked ? "unlocked" : "locked"}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </section>
-            </main>
-          </>
         )}
 
         {view === "settings" && (
@@ -1100,7 +919,7 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
                     Daily task configuration
                   </label>
                   <div className="space-y-3">
-                    {appState.tasks.map((task) => (
+                    {appState.tasks.filter((task) => DAILY_CHECKLIST_TASK_IDS.some((id) => id === task.id)).map((task) => (
                       <div key={task.id} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/15 p-3">
                         <div>
                           <p className="font-semibold text-white">{task.name}</p>
@@ -1136,44 +955,14 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
           </>
         )}
 
-        <nav className="app-tab-bar" aria-label="Main">
-          {navItems.slice(0, 2).map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              aria-current={item.active ? "page" : undefined}
-              className="app-tab-link"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                {item.icon}
-              </svg>
-              {item.label}
-            </Link>
-          ))}
-          <Link
-            href="/stats"
-            className="app-log-button"
-            aria-label="Log today's training"
-            aria-current={view === "stats" ? "page" : undefined}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </Link>
-          {navItems.slice(2).map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              aria-current={item.active ? "page" : undefined}
-              className="app-tab-link"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                {item.icon}
-              </svg>
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+        <MainNavigation
+          active={
+            view === "workouts" ? "Train" :
+              view === "block" ? "Progress" :
+                view === "stats" || view === "calendar" ? "Log" :
+                  view === "settings" ? "Me" : "Today"
+          }
+        />
       </div>
     </div>
   );

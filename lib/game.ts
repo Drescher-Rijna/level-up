@@ -32,6 +32,8 @@ export const DEFAULT_TASKS: Task[] = [
   { id: "character", name: "Character", description: "One intentional act of kindness", stat: "character", xp: 150, active: true, frequency: "daily" },
 ];
 
+export const DAILY_CHECKLIST_TASK_IDS = ["mobility", "recovery", "japanese", "mind", "character"] as const;
+
 export function getLevelThreshold(level: number) {
   return 1000 + (level - 1) * 1100 + Math.max(0, level - 2) * (level - 1) * 50;
 }

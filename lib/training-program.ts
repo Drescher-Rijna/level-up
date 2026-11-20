@@ -1,4 +1,3 @@
-import type { SeasonQuest } from "@/lib/state-types";
 import { getCurrentDateKey } from "@/lib/game";
 
 type TrainingDayPlan = {
@@ -54,27 +53,6 @@ export const TRAINING_WEEK: TrainingDayPlan[] = [
   },
 ];
 
-export const BENCHMARK_GOALS = [
-  { id: "ankle-dorsiflexion", name: "Ankle dorsiflexion", unit: "cm", target: "10–12 cm knee-to-wall, heel flat" },
-  { id: "hip-pancake", name: "Hip pancake", unit: "pass", target: "90° straddle, elbows flat, spine straight" },
-  { id: "t-spine", name: "T-spine rotation", unit: "degrees", target: "45° rotational independence" },
-  { id: "deadlift", name: "Deadlift", unit: "× bodyweight", target: "2.0× BW for 1 rep OR 1.7× BW for 5 reps" },
-  { id: "box-squat", name: "Box squat", unit: "× bodyweight", target: "1.5× BW for 5 reps" },
-  { id: "split-squat", name: "B-split squat / deficit lunge", unit: "× bodyweight in hands", target: "0.5× BW for 8 reps with 4-second negative" },
-  { id: "patellar-isometric", name: "Patellar tendon isometric", unit: "× bodyweight", target: "1.2× BW for 45 sec, zero pain" },
-  { id: "nordic-curl", name: "ACL graft security · Nordic curls", unit: "reps", target: "6 continuous reps, 5-second eccentric to floor" },
-  { id: "pogo-hops", name: "Ankle elasticity · pogo hops", unit: "seconds", target: "60 sec rapid continuous hops, arches held vertical" },
-] as const;
-
-export function getSeasonProgress(quests: SeasonQuest[]) {
-  const focusedMinutes = quests.reduce((total, quest) => total + quest.focusedMinutes, 0);
-  return {
-    focusedMinutes,
-    focusedHours: focusedMinutes / 60,
-    percent: (focusedMinutes / 60000) * 100,
-  };
-}
-
 export function getWeekDates(today = new Date()) {
   const monday = new Date(today);
   monday.setHours(0, 0, 0, 0);
@@ -85,54 +63,4 @@ export function getWeekDates(today = new Date()) {
     date.setDate(monday.getDate() + index);
     return { ...plan, date: getCurrentDateKey(date) };
   });
-}
-
-const BENCHMARK_DUE_AFTER_DAYS = 42;
-const BENCHMARK_HEADS_UP_DAYS = 7;
-
-type BenchmarkLogKey = { seasonOrder: number; metric: string };
-type BenchmarkGoal = (typeof BENCHMARK_GOALS)[number];
-
-export type BenchmarkAlert = {
-  quest: SeasonQuest;
-  isDue: boolean;
-  daysUntilDue: number;
-  remainingGoals: BenchmarkGoal[];
-};
-
-export function getRemainingBenchmarkGoals(quest: SeasonQuest, logs: BenchmarkLogKey[]) {
-  return BENCHMARK_GOALS.filter(
-    (goal) => !logs.some((log) => log.seasonOrder === quest.sortOrder && log.metric === goal.id),
-  );
-}
-
-// Due at six weeks or the hour target; a heads-up starts one week before the six-week mark.
-export function getBenchmarkAlert(quest: SeasonQuest | undefined, logs: BenchmarkLogKey[]): BenchmarkAlert | null {
-  if (!quest || !quest.startedAt) return null;
-  const remainingGoals = getRemainingBenchmarkGoals(quest, logs);
-  if (remainingGoals.length === 0) return null;
-  const today = getCurrentDateKey();
-  const daysElapsed = Math.floor(
-    (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${quest.startedAt}T00:00:00Z`)) / 86400000,
-  );
-  const daysUntilDue = Math.max(BENCHMARK_DUE_AFTER_DAYS - daysElapsed, 0);
-  const reachedHourTarget = quest.focusedMinutes >= quest.targetFocusMinutes;
-  const isDue = reachedHourTarget || daysUntilDue === 0;
-  if (!isDue && daysUntilDue > BENCHMARK_HEADS_UP_DAYS) return null;
-  return { quest, isDue, daysUntilDue, remainingGoals };
-}
-
-export function getBenchmarkAlerts(quests: SeasonQuest[], logs: BenchmarkLogKey[]) {
-  return quests
-    .filter((quest) => quest.status !== "planned")
-    .map((quest) => getBenchmarkAlert(quest, logs))
-    .filter((alert): alert is BenchmarkAlert => alert !== null)
-    .sort((first, second) => first.quest.sortOrder - second.quest.sortOrder);
-}
-
-export function describeBenchmarkAlert(alert: BenchmarkAlert) {
-  const timing = alert.isDue
-    ? "is due"
-    : `is due in ${alert.daysUntilDue} ${alert.daysUntilDue === 1 ? "day" : "days"}`;
-  return `Season ${alert.quest.sortOrder} benchmark testing ${timing}`;
 }

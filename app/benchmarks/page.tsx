@@ -1,5 +1,5 @@
-import SkateMasteryApp from "@/components/skate-mastery-app";
+import { redirect } from "next/navigation";
 
 export default function BenchmarksPage() {
-  return <SkateMasteryApp view="benchmarks" />;
+  redirect("/progress");
 }

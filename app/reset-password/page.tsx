@@ -53,7 +53,7 @@ export default function ResetPasswordPage() {
 
   if (getSupabaseConfigurationError()) {
     return (
-      <div className="min-h-screen bg-[#0b0b0c] px-4 py-6 text-slate-100">
+      <div className="sm-app min-h-screen px-4 py-6 text-slate-100">
         <div className="mx-auto max-w-xl rounded-3xl border border-red-500/30 bg-red-500/10 p-6">
           <h1 className="text-2xl font-black text-white">Supabase configuration needed</h1>
           <p className="mt-3 text-sm leading-6 text-red-100">
@@ -121,9 +121,9 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0b0b0c] px-4 py-6 text-slate-100">
+    <div className="sm-app min-h-screen px-4 py-6 text-slate-100">
       <div className="mx-auto max-w-md rounded-3xl border border-white/10 bg-[#111214] p-6 shadow-xl shadow-black/20">
-        <p className="text-xs uppercase tracking-[0.38em] text-amber-300">Skate Mastery</p>
+        <p className="text-xs uppercase tracking-[0.38em] text-amber-300">Skate / Progress</p>
         <h1 className="mt-3 text-3xl font-black text-white">Reset your password</h1>
         <p className="mt-3 text-sm leading-6 text-slate-300">
           {isRecovery

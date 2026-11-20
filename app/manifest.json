@@ -1,0 +1,17 @@
+{
+  "name": "Skate / Progress",
+  "short_name": "SkateProgress",
+  "description": "A five-year skateboarding progression and motor-learning companion.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#111311",
+  "theme_color": "#111311",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon"
+    }
+  ]
+}

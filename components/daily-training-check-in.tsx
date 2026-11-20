@@ -67,9 +67,6 @@ export default function DailyTrainingCheckIn({
 }) {
   const [kneeScore, setKneeScore] = useState<number | null>(checkIn?.kneeScore ?? null);
   const [energyScore, setEnergyScore] = useState<number | null>(checkIn?.energyScore ?? null);
-  const [skated, setSkated] = useState(checkIn?.skated ?? false);
-  const [workoutCompleted, setWorkoutCompleted] = useState(checkIn?.workoutCompleted ?? false);
-  const [pmReconCompleted, setPmReconCompleted] = useState(checkIn?.pmReconCompleted ?? false);
   const [sleepHours, setSleepHours] = useState(
     checkIn?.sleepHours === null || checkIn?.sleepHours === undefined ? "" : String(checkIn.sleepHours),
   );
@@ -136,24 +133,6 @@ export default function DailyTrainingCheckIn({
           ][kneeScore]}
         </p>
       )}
-
-      <fieldset className="mt-5">
-        <legend className="text-sm font-semibold text-white">Daily checklist</legend>
-        <div className="mt-2 grid gap-2 sm:grid-cols-3">
-          <label className="flex items-start gap-2 rounded-xl border border-white/10 p-3 text-sm text-slate-300">
-            <input type="checkbox" checked={skated} onChange={(event) => setSkated(event.target.checked)} className="mt-1 accent-amber-400" />
-            <span>Skated <span className="block text-xs text-slate-500">Log session and focus minutes in Calendar.</span></span>
-          </label>
-          <label className="flex items-start gap-2 rounded-xl border border-white/10 p-3 text-sm text-slate-300">
-            <input type="checkbox" checked={workoutCompleted} onChange={(event) => setWorkoutCompleted(event.target.checked)} className="mt-1 accent-amber-400" />
-            Workout completed
-          </label>
-          <label className="flex items-start gap-2 rounded-xl border border-white/10 p-3 text-sm text-slate-300">
-            <input type="checkbox" checked={pmReconCompleted} onChange={(event) => setPmReconCompleted(event.target.checked)} className="mt-1 accent-amber-400" />
-            PM recon stretch completed
-          </label>
-        </div>
-      </fieldset>
 
       <div className="mt-5">
         <label htmlFor="sleep-hours" className="text-sm font-semibold text-white">
@@ -225,9 +204,9 @@ export default function DailyTrainingCheckIn({
                 energyScore,
                 co2ToleranceSeconds: parsedCo2Seconds,
                 sleepHours: parsedSleepHours,
-                skated,
-                workoutCompleted,
-                pmReconCompleted,
+                skated: checkIn?.skated ?? false,
+                workoutCompleted: checkIn?.workoutCompleted ?? false,
+                pmReconCompleted: checkIn?.pmReconCompleted ?? false,
               });
             }
           }}

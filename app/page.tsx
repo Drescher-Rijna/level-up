@@ -1,5 +1,5 @@
-import SkateMasteryApp from "@/components/skate-mastery-app";
+import ProgressionApp from "@/components/progression-app";
 
 export default function Home() {
-  return <SkateMasteryApp view="home" />;
+  return <ProgressionApp showDashboardHome />;
 }

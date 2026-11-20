@@ -1,5 +1,5 @@
-import SkateMasteryApp from "@/components/skate-mastery-app";
+import { redirect } from "next/navigation";
 
-export default function QuestsPage() {
-  return <SkateMasteryApp view="quests" />;
+export default function QuestsPage(): never {
+  redirect("/progress");
 }
