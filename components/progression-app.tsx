@@ -39,9 +39,12 @@ import {
   loadDashboardState,
   loadProgressionSnapshot,
   logProgressionSession,
+  getYouTubeVideoId,
+  normalizeYouTubeVideoUrl,
   recordProgressionMake,
   recordProgressionMiss,
   replaceTrainingCycleSlot,
+  saveTrickProgressVideos,
   setMicroSkillBenchmark,
   updateVaultConsistency,
 } from "@/lib/progression";
@@ -57,6 +60,7 @@ import type {
   TrickCategory,
   Trick,
   TrickProgress,
+  TrickProgressVideos,
 } from "@/lib/progression";
 import {
   getProgressionSupabaseClient,
@@ -301,6 +305,27 @@ export default function ProgressionApp({
       setToast("Baseline saved. Pick your cycle.");
     } catch (error) {
       setErrorMessage(getProgressionError(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveProgressVideos(
+    progressId: string,
+    day1VideoUrl: string,
+    tierCompleteVideoUrl: string,
+  ) {
+    if (!user) return false;
+    setBusy(true);
+    setErrorMessage("");
+    try {
+      await saveTrickProgressVideos({ userId: user.id, progressId, day1VideoUrl, tierCompleteVideoUrl });
+      await refreshSnapshot(user.id);
+      setToast("Comparison videos saved.");
+      return true;
+    } catch (error) {
+      setErrorMessage(getProgressionError(error));
+      return false;
     } finally {
       setBusy(false);
     }
@@ -672,6 +697,8 @@ export default function ProgressionApp({
             stanceFilter={stanceFilter}
             setCategoryFilter={setCategoryFilter}
             setStanceFilter={setStanceFilter}
+            busy={busy}
+            onSaveVideos={saveProgressVideos}
           />
         )}
         {activeTab === "Micro-Skills" && (
@@ -773,6 +800,7 @@ export default function ProgressionApp({
 const emptySnapshot: ProgressionSnapshot = {
   tricks: [],
   progress: [],
+  videos: [],
   microSkills: [],
   cycle: null,
   sessions: [],
@@ -981,13 +1009,18 @@ function SkillTreeScreen({
   stanceFilter,
   setCategoryFilter,
   setStanceFilter,
+  busy,
+  onSaveVideos,
 }: {
   snapshot: ProgressionSnapshot;
   categoryFilter: TrickCategory;
   stanceFilter: "all" | Stance;
   setCategoryFilter: (filter: TrickCategory) => void;
   setStanceFilter: (filter: "all" | Stance) => void;
+  busy: boolean;
+  onSaveVideos: (progressId: string, day1VideoUrl: string, tierCompleteVideoUrl: string) => Promise<boolean>;
 }) {
+  const [editingProgress, setEditingProgress] = useState<TrickProgress | null>(null);
   const progressByTrick = useMemo(() => {
     const result = new Map<string, TrickProgress[]>();
     snapshot.progress.forEach((progress) => {
@@ -1054,10 +1087,20 @@ function SkillTreeScreen({
             <div className="progression-tier-row">
               {(progressByTrick.get(trick.id) ?? []).map((progress) => {
                 const locked = progress.tier > 1 && (progressByTrick.get(trick.id)?.find((item) => item.tier === progress.tier - 1)?.score ?? 0) !== 3;
+                const videos = snapshot.videos.find((item) => item.progress_id === progress.id);
+                const hasVideos = Boolean(videos?.day1_video_url || videos?.tier_complete_video_url);
                 return (
-                  <div key={progress.id} className={`progression-tier-badge tier-${progress.score}${locked ? " is-locked" : ""}`} aria-label={`Tier ${progress.tier}, ${locked ? "locked" : `score ${progress.score}`}`}>
+                  <button
+                    key={progress.id}
+                    type="button"
+                    className={`progression-tier-badge tier-${progress.score}${locked ? " is-locked" : ""}`}
+                    aria-label={`${getTrickName(trick)}, tier ${progress.tier}${locked ? ", locked" : `, score ${progress.score}`}. ${hasVideos ? "Edit comparison videos." : "Add comparison videos."}`}
+                    title="Add or edit Day 1 and tier-complete videos"
+                    onClick={() => setEditingProgress(progress)}
+                  >
                     {locked ? <LockKeyhole size={12} /> : <><small>T{progress.tier}</small><strong>{progress.score}</strong></>}
-                  </div>
+                    {hasVideos && <Camera className="progression-tier-video-icon" size={10} aria-hidden="true" />}
+                  </button>
                 );
               })}
             </div>
@@ -1071,6 +1114,129 @@ function SkillTreeScreen({
         <span><i className="tier-swatch tier-2" /> Consistent</span>
         <span><i className="tier-swatch tier-3" /> Mastered</span>
       </div>
+      {editingProgress && (
+        <TrickVideosModal
+          key={editingProgress.id}
+          trick={snapshot.tricks.find((item) => item.id === editingProgress.trick_id)}
+          progress={editingProgress}
+          videos={snapshot.videos.find((item) => item.progress_id === editingProgress.id)}
+          busy={busy}
+          onClose={() => setEditingProgress(null)}
+          onSave={async (day1VideoUrl, tierCompleteVideoUrl) => {
+            const saved = await onSaveVideos(editingProgress.id, day1VideoUrl, tierCompleteVideoUrl);
+            if (saved) setEditingProgress(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function TrickVideosModal({
+  trick,
+  progress,
+  videos,
+  busy,
+  onClose,
+  onSave,
+}: {
+  trick: Trick | undefined;
+  progress: TrickProgress;
+  videos: TrickProgressVideos | undefined;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (day1VideoUrl: string, tierCompleteVideoUrl: string) => Promise<void>;
+}) {
+  const [day1VideoUrl, setDay1VideoUrl] = useState(videos?.day1_video_url ?? "");
+  const [tierCompleteVideoUrl, setTierCompleteVideoUrl] = useState(videos?.tier_complete_video_url ?? "");
+  const [formError, setFormError] = useState("");
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormError("");
+    try {
+      normalizeYouTubeVideoUrl(day1VideoUrl);
+      normalizeYouTubeVideoUrl(tierCompleteVideoUrl);
+    } catch (error) {
+      setFormError(getProgressionError(error));
+      return;
+    }
+    await onSave(day1VideoUrl, tierCompleteVideoUrl);
+  }
+
+  function renderVideoPreview(title: string, url: string) {
+    const videoId = getYouTubeVideoId(url);
+    return (
+      <div className="progression-video-preview">
+        <strong>{title}</strong>
+        {videoId ? (
+          <iframe
+            src={`https://www.youtube-nocookie.com/embed/${videoId}`}
+            title={`${title} · ${trick ? getTrickName(trick) : "Trick"} tier ${progress.tier}`}
+            loading="lazy"
+            referrerPolicy="strict-origin-when-cross-origin"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+          />
+        ) : (
+          <div className="progression-video-empty">Paste a YouTube link to preview.</div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="progression-modal-scrim progression-video-scrim"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !busy) onClose();
+      }}
+    >
+      <section className="progression-cycle-modal progression-video-modal" role="dialog" aria-modal="true" aria-labelledby="trick-video-title">
+        <header className="progression-modal-header">
+          <button className="progression-icon-button" type="button" aria-label="Close video editor" onClick={onClose} disabled={busy}>
+            <X size={18} />
+          </button>
+        </header>
+        <p className="progression-eyebrow">Trick progress · Tier {progress.tier}</p>
+        <h2 id="trick-video-title">{trick ? getTrickName(trick) : "Trick videos"}</h2>
+        <p className="progression-modal-lede">Add a Day 1 clip and a tier-complete clip to compare how this trick developed.</p>
+        <form className="progression-video-form" onSubmit={(event) => void submit(event)}>
+          <label className="progression-field">
+            <span>Day 1 YouTube link</span>
+            <input
+              type="url"
+              inputMode="url"
+              autoCapitalize="off"
+              autoComplete="url"
+              placeholder="https://youtu.be/..."
+              value={day1VideoUrl}
+              onChange={(event) => setDay1VideoUrl(event.target.value)}
+            />
+          </label>
+          <label className="progression-field">
+            <span>Tier complete YouTube link</span>
+            <input
+              type="url"
+              inputMode="url"
+              autoCapitalize="off"
+              autoComplete="url"
+              placeholder="https://youtu.be/..."
+              value={tierCompleteVideoUrl}
+              onChange={(event) => setTierCompleteVideoUrl(event.target.value)}
+            />
+          </label>
+          {formError && <p className="progression-video-error" role="alert">{formError}</p>}
+          <div className="progression-video-previews">
+            {renderVideoPreview("Day 1", day1VideoUrl)}
+            {renderVideoPreview("Tier complete", tierCompleteVideoUrl)}
+          </div>
+          <p className="progression-video-help">Public and unlisted videos can be embedded. Clear both links to remove the comparison.</p>
+          <button className="progression-primary-button" type="submit" disabled={busy}>
+            {busy ? "Saving videos..." : "Save comparison videos"} <ArrowUpRight size={17} />
+          </button>
+        </form>
+      </section>
     </div>
   );
 }

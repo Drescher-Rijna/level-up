@@ -32,6 +32,22 @@ create table if not exists public.user_trick_progress (
   unique (user_id, trick_id, tier)
 );
 
+create table if not exists public.user_trick_progress_videos (
+  progress_id uuid primary key references public.user_trick_progress(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  day1_video_url text,
+  tier_complete_video_url text,
+  updated_at timestamptz not null default now(),
+  check (day1_video_url is not null or tier_complete_video_url is not null),
+  check (
+    (day1_video_url is null or day1_video_url ~ '^https://www[.]youtube[.]com/watch[?]v=[A-Za-z0-9_-]{11}$')
+    and (tier_complete_video_url is null or tier_complete_video_url ~ '^https://www[.]youtube[.]com/watch[?]v=[A-Za-z0-9_-]{11}$')
+  )
+);
+
+create index if not exists user_trick_progress_videos_user
+  on public.user_trick_progress_videos (user_id);
+
 alter table public.user_trick_progress
   add column if not exists attempts integer not null default 0 check (attempts >= 0);
 alter table public.user_trick_progress
@@ -793,6 +809,7 @@ $$;
 
 alter table public.tricks_catalog enable row level security;
 alter table public.user_trick_progress enable row level security;
+alter table public.user_trick_progress_videos enable row level security;
 alter table public.micro_skills enable row level security;
 alter table public.user_progression_baselines enable row level security;
 alter table public.training_cycles enable row level security;
@@ -807,6 +824,24 @@ create policy "Anyone can read the trick catalog"
 drop policy if exists "Users can read their trick progress" on public.user_trick_progress;
 create policy "Users can read their trick progress"
   on public.user_trick_progress for select using (auth.uid() = user_id);
+
+drop policy if exists "Users can manage their trick progress videos" on public.user_trick_progress_videos;
+create policy "Users can manage their trick progress videos"
+  on public.user_trick_progress_videos for all
+  using (
+    auth.uid() = user_id
+    and exists (
+      select 1 from public.user_trick_progress
+      where id = progress_id and user_id = auth.uid()
+    )
+  )
+  with check (
+    auth.uid() = user_id
+    and exists (
+      select 1 from public.user_trick_progress
+      where id = progress_id and user_id = auth.uid()
+    )
+  );
 
 drop policy if exists "Users can read their micro-skills" on public.micro_skills;
 create policy "Users can read their micro-skills"
@@ -838,6 +873,7 @@ grant usage on schema public to anon, authenticated;
 grant select on public.tricks_catalog to anon, authenticated;
 grant select on public.user_trick_progress, public.micro_skills, public.training_cycles,
   public.training_cycle_slot_completions, public.session_logs to authenticated;
+grant select, insert, update, delete on public.user_trick_progress_videos to authenticated;
 grant select on public.user_progression_baselines to authenticated;
 grant select, insert, update, delete on public.playtime_vault to authenticated;
 

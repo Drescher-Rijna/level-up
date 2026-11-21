@@ -33,6 +33,8 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 
 Apply or re-run [`supabase/skate-progression.sql`](./supabase/skate-progression.sql) in the Supabase SQL Editor after updating the progression app. It creates the 84-trick catalog, signup seeding trigger, user progress tables, baseline-assessment and training-cycle RPCs, and Row Level Security policies. The migration also backfills progression rows for existing Auth users. New accounts receive 504 trick-tier progress rows and seven micro-skills. The four-step baseline appears for accounts without a completed baseline; baseline mastery backfills all lower tiers, and the summary calculates its starting level at 100 XP per progression score point using the existing level thresholds.
 
+The Skill Tree also lets users save Day 1 and tier-complete YouTube links for each trick tier and compare them with embedded previews. Re-run the progression SQL to create the private video-links table; only the signed-in user can access their saved links.
+
 The browser and Next.js Proxy use the Supabase SSR package to keep Auth cookies refreshed. The PWA manifest requests portrait orientation; a landscape reminder is shown on short landscape screens where browsers cannot enforce orientation.
 
 ## Supabase schema

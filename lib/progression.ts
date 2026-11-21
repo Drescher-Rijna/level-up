@@ -27,6 +27,13 @@ export type TrickProgress = {
   consecutive_makes: number;
 };
 
+export type TrickProgressVideos = {
+  progress_id: string;
+  user_id: string;
+  day1_video_url: string | null;
+  tier_complete_video_url: string | null;
+};
+
 export type MicroSkill = {
   id: string;
   name: string;
@@ -77,6 +84,7 @@ export type ProgressionBaseline = {
 export type ProgressionSnapshot = {
   tricks: Trick[];
   progress: TrickProgress[];
+  videos: TrickProgressVideos[];
   microSkills: MicroSkill[];
   cycle: TrainingCycle | null;
   sessions: SessionLog[];
@@ -113,10 +121,11 @@ export async function loadProgressionSnapshot(userId: string): Promise<Progressi
     String(weekStart.getDate()).padStart(2, "0"),
   ].join("-");
 
-  const [tricksResult, progressResult, skillsResult, cycleResult, sessionsResult, vaultResult, baselineResult] =
+  const [tricksResult, progressResult, videosResult, skillsResult, cycleResult, sessionsResult, vaultResult, baselineResult] =
     await Promise.all([
       client.from("tricks_catalog").select("id, category, name, direction, stance, sort_order").order("sort_order"),
       client.from("user_trick_progress").select("id, trick_id, tier, score, attempts, makes, consecutive_makes").eq("user_id", userId),
+      client.from("user_trick_progress_videos").select("progress_id, user_id, day1_video_url, tier_complete_video_url").eq("user_id", userId),
       client.from("micro_skills").select("id, name, drill_description, overlay_cue, benchmark_test, logged_minutes, benchmark_passed").eq("user_id", userId).order("name"),
       client.from("training_cycles").select("id, start_date, end_date, status, active_micro_skill_id, slot_a_progress_id, slot_b_progress_id, slot_c_progress_id, slot_d_progress_id").eq("user_id", userId).eq("status", "active").order("start_date", { ascending: false }).limit(1).maybeSingle(),
       client.from("session_logs").select("id, session_date, duration_minutes, session_type, filmed_diagnostic, active_quest_work, warmup_minutes, overlay_minutes").eq("user_id", userId).gte("session_date", startDate).order("session_date", { ascending: false }),
@@ -127,6 +136,7 @@ export async function loadProgressionSnapshot(userId: string): Promise<Progressi
   const firstError = [
     tricksResult.error,
     progressResult.error,
+    videosResult.error,
     skillsResult.error,
     cycleResult.error,
     sessionsResult.error,
@@ -138,12 +148,75 @@ export async function loadProgressionSnapshot(userId: string): Promise<Progressi
   return {
     tricks: (tricksResult.data ?? []) as Trick[],
     progress: (progressResult.data ?? []) as TrickProgress[],
+    videos: (videosResult.data ?? []) as TrickProgressVideos[],
     microSkills: (skillsResult.data ?? []) as MicroSkill[],
     cycle: cycleResult.data as TrainingCycle | null,
     sessions: (sessionsResult.data ?? []) as SessionLog[],
     vault: (vaultResult.data ?? []) as VaultEntry[],
     baseline: baselineResult.data as ProgressionBaseline | null,
   };
+}
+
+export function getYouTubeVideoId(input: string) {
+  if (!input.trim()) return null;
+
+  try {
+    const url = new URL(input.trim());
+    const host = url.hostname.toLowerCase();
+    let id: string | null = null;
+
+    if (host === "youtu.be" || host === "www.youtu.be") {
+      id = url.pathname.split("/").filter(Boolean)[0] ?? null;
+    } else if (["youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com"].includes(host)) {
+      if (url.pathname === "/watch") {
+        id = url.searchParams.get("v");
+      } else {
+        const pathParts = url.pathname.split("/").filter(Boolean);
+        if (["embed", "shorts", "live"].includes(pathParts[0] ?? "")) id = pathParts[1] ?? null;
+      }
+    }
+
+    return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+export function normalizeYouTubeVideoUrl(input: string) {
+  if (!input.trim()) return null;
+  const videoId = getYouTubeVideoId(input);
+  if (!videoId) throw new Error("Enter a valid YouTube video link.");
+  return `https://www.youtube.com/watch?v=${videoId}`;
+}
+
+export async function saveTrickProgressVideos(input: {
+  userId: string;
+  progressId: string;
+  day1VideoUrl: string;
+  tierCompleteVideoUrl: string;
+}) {
+  const day1VideoUrl = normalizeYouTubeVideoUrl(input.day1VideoUrl);
+  const tierCompleteVideoUrl = normalizeYouTubeVideoUrl(input.tierCompleteVideoUrl);
+  const client = getClient();
+
+  if (!day1VideoUrl && !tierCompleteVideoUrl) {
+    const { error } = await client
+      .from("user_trick_progress_videos")
+      .delete()
+      .eq("user_id", input.userId)
+      .eq("progress_id", input.progressId);
+    throwOnError(error);
+    return;
+  }
+
+  const { error } = await client.from("user_trick_progress_videos").upsert({
+    user_id: input.userId,
+    progress_id: input.progressId,
+    day1_video_url: day1VideoUrl,
+    tier_complete_video_url: tierCompleteVideoUrl,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "progress_id" });
+  throwOnError(error);
 }
 
 export async function loadDashboardState(userId: string, userEmail?: string | null): Promise<DashboardState> {
