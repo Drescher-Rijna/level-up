@@ -54,6 +54,7 @@ import type {
   QuestSlot,
   Stance,
   TrainingCycle,
+  TrickCategory,
   Trick,
   TrickProgress,
 } from "@/lib/progression";
@@ -73,15 +74,17 @@ const TABS: { label: Tab; icon: typeof House }[] = [
 ];
 
 const SLOT_NAMES: Record<QuestSlot, string> = {
-  A: "Flatground / Gap",
-  B: "Ledge / Rail",
-  C: "Weak Stance",
+  A: "Flat / Gaps",
+  B: "Ledges",
+  C: "Rails",
+  D: "Weak Stance",
 };
 
 const STANCES: Stance[] = ["Regular", "Fakie", "Nollie", "Switch"];
 const TIER_GUIDES = {
   flat_gap: ["Fast Flat", "2-Stair / 1-Deck", "4-Stair / 2-Deck", "6-Stair / 3-Deck", "8-Stair / Waist Gap", "10+ Stair"],
-  grind_slide: ["Curb / Floor Bar", "Shin Ledge / Knee Bar", "Knee Ledge / Thigh Bar", "Mid-Thigh / 3–4 Downrail", "Hip Ledge / 6–7 Downrail", "Handrail (8+ Stair)"],
+  ledge: ["Curb / 6\" Manny Pad", "Shin Ledge (12-14\")", "Knee Ledge (16-18\")", "Mid-Thigh Ledge (20-24\")", "Hip Ledge (26-30\")", "Chest / Kink / Tech Ledge"],
+  rail: ["Floor Bar / Parking Block", "Knee Flat Bar (14-16\")", "Thigh Flat Bar (18-20\")", "Small Down-Rail (3-4 Stair) / Low Hubba", "Medium Down-Rail (6-7 Stair) / Steep Hubba", "Full Handrail (8-10+ Stair)"],
 };
 
 function localDateKey(date = new Date()) {
@@ -115,7 +118,13 @@ function formatHours(minutes: number) {
   return `${(minutes / 60).toFixed(1)} / 100 hrs`;
 }
 
-export default function ProgressionApp({ showDashboardHome = false }: { showDashboardHome?: boolean }) {
+export default function ProgressionApp({
+  showDashboardHome = false,
+  openBaseline = false,
+}: {
+  showDashboardHome?: boolean;
+  openBaseline?: boolean;
+}) {
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(() => !getProgressionSupabaseClient());
   const [snapshot, setSnapshot] = useState<ProgressionSnapshot | null>(null);
@@ -130,6 +139,7 @@ export default function ProgressionApp({ showDashboardHome = false }: { showDash
   const [errorMessage, setErrorMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [cycleSetupOpen, setCycleSetupOpen] = useState(false);
+  const [baselineOpen, setBaselineOpen] = useState(openBaseline);
   const [slotPicker, setSlotPicker] = useState<QuestSlot | null>(null);
   const [toast, setToast] = useState("");
   const [qualityConfirmed, setQualityConfirmed] = useState<Record<string, boolean>>({});
@@ -141,8 +151,8 @@ export default function ProgressionApp({ showDashboardHome = false }: { showDash
   const [sessionQuestWork, setSessionQuestWork] = useState(true);
   const [sessionNotes, setSessionNotes] = useState("");
   const [selectedMicroSkill, setSelectedMicroSkill] = useState("");
-  const [slotPicks, setSlotPicks] = useState<SlotPicks>({ A: "", B: "", C: "" });
-  const [categoryFilter, setCategoryFilter] = useState<"all" | "flat_gap" | "grind_slide">("all");
+  const [slotPicks, setSlotPicks] = useState<SlotPicks>({ A: "", B: "", C: "", D: "" });
+  const [categoryFilter, setCategoryFilter] = useState<TrickCategory>("flat_gap");
   const [stanceFilter, setStanceFilter] = useState<"all" | Stance>("all");
   const [vaultName, setVaultName] = useState("");
   const [vaultObstacle, setVaultObstacle] = useState("");
@@ -189,7 +199,7 @@ export default function ProgressionApp({ showDashboardHome = false }: { showDash
         setCycleSetupOpen(false);
         setSlotPicker(null);
         setSelectedMicroSkill("");
-        setSlotPicks({ A: "", B: "", C: "" });
+        setSlotPicks({ A: "", B: "", C: "", D: "" });
       }
       setAuthReady(true);
     });
@@ -280,10 +290,20 @@ export default function ProgressionApp({ showDashboardHome = false }: { showDash
   );
 
   async function submitBaseline(input: BaselineSubmission) {
-    await runAction(
-      () => completeProgressionBaseline(input),
-      "Baseline saved. Pick Cycle 1.",
-    );
+    setBusy(true);
+    setErrorMessage("");
+    try {
+      await completeProgressionBaseline(input);
+      if (user) await refreshSnapshot(user.id);
+      setBaselineOpen(false);
+      setCycleSetupOpen(true);
+      window.history.replaceState(window.history.state, "", "/progress");
+      setToast("Baseline saved. Pick your cycle.");
+    } catch (error) {
+      setErrorMessage(getProgressionError(error));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function signOut() {
@@ -308,8 +328,10 @@ export default function ProgressionApp({ showDashboardHome = false }: { showDash
     const bCandidates = eligibleProgress(snapshot, "B", aId ? [aId] : []);
     const bId = bCandidates[0]?.id ?? "";
     const cCandidates = eligibleProgress(snapshot, "C", [aId, bId].filter(Boolean));
+    const cId = cCandidates[0]?.id ?? "";
+    const dCandidates = eligibleProgress(snapshot, "D", [aId, bId, cId].filter(Boolean));
     setSelectedMicroSkill(firstSkill?.id ?? "");
-    setSlotPicks({ A: aId, B: bId, C: cCandidates[0]?.id ?? "" });
+    setSlotPicks({ A: aId, B: bId, C: cId, D: dCandidates[0]?.id ?? "" });
     setCycleSetupOpen(true);
   };
 
@@ -318,8 +340,9 @@ export default function ProgressionApp({ showDashboardHome = false }: { showDash
     slotAProgressId: slotPicks.A,
     slotBProgressId: slotPicks.B,
     slotCProgressId: slotPicks.C,
+    slotDProgressId: slotPicks.D,
   }) {
-    if (!snapshot || !picks.activeMicroSkillId || !picks.slotAProgressId || !picks.slotBProgressId || !picks.slotCProgressId) return;
+    if (!snapshot || !picks.activeMicroSkillId || !picks.slotAProgressId || !picks.slotBProgressId || !picks.slotCProgressId || !picks.slotDProgressId) return;
     await runAction(async () => {
       await createTrainingCycle(picks);
       setCycleSetupOpen(false);
@@ -367,12 +390,7 @@ export default function ProgressionApp({ showDashboardHome = false }: { showDash
         if (user) await saveDashboardTaskCompletion(user.id, "skate", localDateKey());
         const trick = getTrickById(snapshot ?? emptySnapshot, progress.trick_id);
         setToast(`${getTrickName(trick)} mastered. Three clean makes!`);
-        if (result.cycle_completed) {
-          setCycleSetupOpen(true);
-          setSlotPicker(null);
-        } else {
-          setSlotPicker(slot);
-        }
+        setSlotPicker(slot);
       } else {
         setToast(clean
           ? `Clean make logged · ${result.consecutive_makes} in a row`
@@ -579,7 +597,7 @@ export default function ProgressionApp({ showDashboardHome = false }: { showDash
     return <LoadingScreen />;
   }
 
-  if (!snapshot.baseline) {
+  if (!snapshot.baseline || baselineOpen) {
     return (
       <BaselineAssessment
         snapshot={snapshot}
@@ -814,6 +832,7 @@ function TodayScreen({
         { key: "A", id: cycle.slot_a_progress_id, color: "amber" },
         { key: "B", id: cycle.slot_b_progress_id, color: "blue" },
         { key: "C", id: cycle.slot_c_progress_id, color: "green" },
+        { key: "D", id: cycle.slot_d_progress_id, color: "amber" },
       ]
     : [];
   const daysLeft = cycle
@@ -851,7 +870,7 @@ function TodayScreen({
 
           <div className="progression-section-heading">
             <div><p className="progression-eyebrow">Your focus</p><h2>Cycle trick goals</h2></div>
-            <span className="progression-count-badge">{activeSlots} / 3</span>
+            <span className="progression-count-badge">{activeSlots} / 4</span>
           </div>
           <div className="progression-quest-list">
             {slots.map(({ key, id, color }) => {
@@ -930,10 +949,12 @@ function TodayScreen({
             </button>
             {guideOpen && (
               <ol className="progression-timeline">
-                <li><span>0–20m</span><div><strong>Warm-up</strong><small>Active micro-skill drill + roll-in</small></div></li>
-                <li><span>20–45m</span><div><strong>Slot A</strong><small>Flatground / gap tricks</small></div></li>
-                <li><span>45–70m</span><div><strong>Slots B + C</strong><small>Ledge / rail, then weak stance</small></div></li>
-                <li><span>70–90m</span><div><strong>Playtime</strong><small>Explore, film a make, log a signature</small></div></li>
+                <li><span>0–20m</span><div><strong>Warmup</strong><small>Active micro-skill drill + roll-in</small></div></li>
+                <li><span>20–35m</span><div><strong>Slot A</strong><small>Flat / gap tricks</small></div></li>
+                <li><span>35–50m</span><div><strong>Slot B</strong><small>Ledge tricks</small></div></li>
+                <li><span>50–65m</span><div><strong>Slot C</strong><small>Rail tricks</small></div></li>
+                <li><span>65–75m</span><div><strong>Slot D</strong><small>Weak-stance trick</small></div></li>
+                <li><span>75–90m</span><div><strong>Playtime Lab</strong><small>Explore, film a make, log a signature</small></div></li>
               </ol>
             )}
           </section>
@@ -946,7 +967,7 @@ function TodayScreen({
           <div className="progression-empty-icon"><Sparkles size={22} /></div>
           <p className="progression-eyebrow">{snapshot.cycle ? "Cycle expired" : "Start a cycle"}</p>
           <h2>Set up your 2-week cycle</h2>
-          <p>Choose one micro-skill and three trick goals. The next eligible tricks are ready when you are.</p>
+          <p>Choose one micro-skill and four trick goals. The next eligible tricks are ready when you are.</p>
           <button className="progression-primary-button" onClick={onOpenSetup}>Build my cycle <ArrowUpRight size={17} /></button>
         </section>
       )}
@@ -962,9 +983,9 @@ function SkillTreeScreen({
   setStanceFilter,
 }: {
   snapshot: ProgressionSnapshot;
-  categoryFilter: "all" | "flat_gap" | "grind_slide";
+  categoryFilter: TrickCategory;
   stanceFilter: "all" | Stance;
-  setCategoryFilter: (filter: "all" | "flat_gap" | "grind_slide") => void;
+  setCategoryFilter: (filter: TrickCategory) => void;
   setStanceFilter: (filter: "all" | Stance) => void;
 }) {
   const progressByTrick = useMemo(() => {
@@ -978,24 +999,24 @@ function SkillTreeScreen({
     return result;
   }, [snapshot.progress]);
   const tricks = snapshot.tricks.filter((trick) =>
-    (categoryFilter === "all" || trick.category === categoryFilter) &&
+    trick.category === categoryFilter &&
     (stanceFilter === "all" || trick.stance === stanceFilter),
   );
 
   return (
     <div className="progression-stack">
       <section className="progression-page-intro">
-        <p className="progression-eyebrow">84 primitives · 6 tiers</p>
+        <p className="progression-eyebrow">140 primitives · 6 tiers</p>
         <h2>Build the whole bag.</h2>
         <p>Higher tiers unlock only after the previous tier is mastered.</p>
       </section>
       <div className="progression-filter-group" aria-label="Trick category">
         {[
-          ["all", "All"],
-          ["flat_gap", "Flat / Gap"],
-          ["grind_slide", "Grind / Slide"],
+          ["flat_gap", "Flat / Gaps"],
+          ["ledge", "Ledges"],
+          ["rail", "Rails"],
         ].map(([value, label]) => (
-          <button key={value} className={categoryFilter === value ? "is-selected" : ""} onClick={() => setCategoryFilter(value as typeof categoryFilter)}>{label}</button>
+          <button key={value} className={categoryFilter === value ? "is-selected" : ""} onClick={() => setCategoryFilter(value as TrickCategory)}>{label}</button>
         ))}
       </div>
       <div className="progression-filter-group progression-filter-stance" aria-label="Stance">
@@ -1008,7 +1029,8 @@ function SkillTreeScreen({
           <summary>Obstacle tier guide <ChevronDown size={16} /></summary>
           {([
             ["flat_gap", "FLATGROUND / GAPS"],
-            ["grind_slide", "GRINDS / SLIDES"],
+            ["ledge", "LEDGES"],
+            ["rail", "RAILS"],
           ] as const).map(([category, label]) => (
             <div className="progression-tier-guide-group" key={category}>
               <span>{label}</span>
@@ -1024,7 +1046,7 @@ function SkillTreeScreen({
           <article className="progression-tree-card" key={trick.id}>
             <div className="progression-tree-title">
               <div>
-                <span>{trick.category === "flat_gap" ? "FLAT / GAP" : `${trick.direction} · GRIND / SLIDE`}</span>
+                <span>{trick.category === "flat_gap" ? "FLAT / GAP" : `${trick.direction} · ${trick.category.toUpperCase()}`}</span>
                 <h3>{getTrickName(trick)}</h3>
               </div>
               <span className="progression-stance-pill">{trick.stance}</span>
@@ -1207,6 +1229,7 @@ function CycleSetupModal({
     slotAProgressId: string;
     slotBProgressId: string;
     slotCProgressId: string;
+    slotDProgressId: string;
   }) => void;
 }) {
   const firstSlotA = eligibleProgress(snapshot, "A")[0]?.id ?? "";
@@ -1214,20 +1237,24 @@ function CycleSetupModal({
   const firstSlotB = eligibleProgress(snapshot, "B", [initialSlotA].filter(Boolean))[0]?.id ?? "";
   const initialSlotB = slotPicks.B || firstSlotB;
   const firstSlotC = eligibleProgress(snapshot, "C", [initialSlotA, initialSlotB].filter(Boolean))[0]?.id ?? "";
+  const initialSlotC = slotPicks.C || firstSlotC;
+  const firstSlotD = eligibleProgress(snapshot, "D", [initialSlotA, initialSlotB, initialSlotC].filter(Boolean))[0]?.id ?? "";
   const [pickedMicroSkill, setPickedMicroSkill] = useState(
     selectedMicroSkill || [...snapshot.microSkills].sort((a, b) => a.logged_minutes - b.logged_minutes)[0]?.id || "",
   );
   const [pickedSlots, setPickedSlots] = useState<SlotPicks>({
     A: initialSlotA,
     B: initialSlotB,
-    C: slotPicks.C || firstSlotC,
+    C: initialSlotC,
+    D: slotPicks.D || firstSlotD,
   });
   const candidates = {
-    A: eligibleProgress(snapshot, "A", [pickedSlots.B, pickedSlots.C].filter(Boolean)),
-    B: eligibleProgress(snapshot, "B", [pickedSlots.A, pickedSlots.C].filter(Boolean)),
-    C: eligibleProgress(snapshot, "C", [pickedSlots.A, pickedSlots.B].filter(Boolean)),
+    A: eligibleProgress(snapshot, "A", [pickedSlots.B, pickedSlots.C, pickedSlots.D].filter(Boolean)),
+    B: eligibleProgress(snapshot, "B", [pickedSlots.A, pickedSlots.C, pickedSlots.D].filter(Boolean)),
+    C: eligibleProgress(snapshot, "C", [pickedSlots.A, pickedSlots.B, pickedSlots.D].filter(Boolean)),
+    D: eligibleProgress(snapshot, "D", [pickedSlots.A, pickedSlots.B, pickedSlots.C].filter(Boolean)),
   };
-  const canSubmit = Boolean(pickedMicroSkill && pickedSlots.A && pickedSlots.B && pickedSlots.C);
+  const canSubmit = Boolean(pickedMicroSkill && pickedSlots.A && pickedSlots.B && pickedSlots.C && pickedSlots.D);
 
   return (
     <div className="progression-modal-scrim">
@@ -1237,7 +1264,7 @@ function CycleSetupModal({
         </header>
         <p className="progression-eyebrow">{isExpired ? "New two-week cycle" : "Cycle setup · 01/02"}</p>
         <h2 id="cycle-modal-title">{isExpired ? "Your next cycle is ready." : "Pick your focus."}</h2>
-        <p className="progression-modal-lede">Choose a micro-skill and three doable tricks. We&apos;ll tee up the next trick as soon as you master a slot.</p>
+        <p className="progression-modal-lede">Choose a micro-skill and four doable tricks. We&apos;ll tee up the next trick as soon as you master a slot.</p>
         <label className="progression-field">
           <span>Active micro-skill <small>recommendation: least-practiced</small></span>
           <select value={pickedMicroSkill} onChange={(event) => { setPickedMicroSkill(event.target.value); onMicroSkillChange(event.target.value); }}>
@@ -1245,7 +1272,7 @@ function CycleSetupModal({
           </select>
         </label>
         <div className="progression-cycle-picks">
-          {(["A", "B", "C"] as QuestSlot[]).map((slot) => (
+          {(["A", "B", "C", "D"] as QuestSlot[]).map((slot) => (
             <label className="progression-field" key={slot}>
               <span><i className={`progression-slot-dot slot-${slot.toLowerCase()}`} />Slot {slot} <small>{SLOT_NAMES[slot]}</small></span>
               <select value={pickedSlots[slot]} onChange={(event) => {
@@ -1271,6 +1298,7 @@ function CycleSetupModal({
             slotAProgressId: pickedSlots.A,
             slotBProgressId: pickedSlots.B,
             slotCProgressId: pickedSlots.C,
+            slotDProgressId: pickedSlots.D,
           })}
         >
           {busy ? "Locking in..." : "Lock in this cycle"} <ArrowUpRight size={17} />
@@ -1295,13 +1323,15 @@ function QuestPickerDrawer({
   onClose: () => void;
   onChoose: (progressId: string) => void;
 }) {
-  const excluded = [
-    cycle.slot_a_progress_id,
-    cycle.slot_b_progress_id,
-    cycle.slot_c_progress_id,
-  ].filter((id) => id !== (slot === "A" ? cycle.slot_a_progress_id : slot === "B" ? cycle.slot_b_progress_id : cycle.slot_c_progress_id));
+  const cycleProgressIds: Record<QuestSlot, string> = {
+    A: cycle.slot_a_progress_id,
+    B: cycle.slot_b_progress_id,
+    C: cycle.slot_c_progress_id,
+    D: cycle.slot_d_progress_id,
+  };
+  const previousId = cycleProgressIds[slot];
+  const excluded = Object.values(cycleProgressIds).filter((id) => id !== previousId);
   const options = eligibleProgress(snapshot, slot, excluded);
-  const previousId = slot === "A" ? cycle.slot_a_progress_id : slot === "B" ? cycle.slot_b_progress_id : cycle.slot_c_progress_id;
 
   return (
     <div className="progression-modal-scrim progression-drawer-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>

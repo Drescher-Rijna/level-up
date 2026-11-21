@@ -6,7 +6,6 @@ import { getLevelData } from "@/lib/game";
 import type {
   ProgressionSnapshot,
   Stance,
-  StanceComfort,
   StanceComfortRatings,
   Trick,
 } from "@/lib/progression";
@@ -30,9 +29,9 @@ export type BaselineSubmission = {
 };
 
 const STANCES: Stance[] = ["Regular", "Fakie", "Nollie", "Switch"];
-const COMFORT_LEVELS: StanceComfort[] = ["Beginner", "Solid", "Advanced"];
 const FLAT_TIERS = ["None", "T1 Flat", "T2 2-Stair", "T3 4-Stair", "T4 6-Stair", "T5 8-Stair", "T6 10+"];
-const GRIND_TIERS = ["None", "T1 Curb", "T2 Shin", "T3 Knee", "T4 3–4 Rail", "T5 6–7 Rail", "T6 Handrail"];
+const LEDGE_TIERS = ["None", "T1 Curb", "T2 Shin", "T3 Knee", "T4 Mid-thigh", "T5 Hip", "T6 Tech"];
+const RAIL_TIERS = ["None", "T1 Floor bar", "T2 Knee bar", "T3 Thigh bar", "T4 Small down-rail", "T5 Medium down-rail", "T6 Handrail"];
 
 function initialAssessments(snapshot: ProgressionSnapshot) {
   return Object.fromEntries(snapshot.tricks.map((trick) => {
@@ -79,11 +78,19 @@ export default function BaselineAssessment({
   onSubmit: (input: BaselineSubmission) => void | Promise<void>;
 }) {
   const [step, setStep] = useState(1);
-  const [stanceComfort, setStanceComfort] = useState<Partial<StanceComfortRatings>>({});
+  const [stanceComfort] = useState<StanceComfortRatings>(
+    () => snapshot.baseline?.stance_comfort ?? {
+      Regular: "Solid",
+      Fakie: "Solid",
+      Nollie: "Solid",
+      Switch: "Solid",
+    },
+  );
   const [assessments, setAssessments] = useState<Record<string, TrickAssessment>>(
     () => initialAssessments(snapshot),
   );
   const [stanceTab, setStanceTab] = useState<Stance>("Regular");
+  const [grindCategory, setGrindCategory] = useState<"ledge" | "rail">("ledge");
   const [skillHours, setSkillHours] = useState<Record<string, number>>(() =>
     Object.fromEntries(snapshot.microSkills.map((skill) => [
       skill.id,
@@ -97,10 +104,10 @@ export default function BaselineAssessment({
   );
   const grindGroups = useMemo(
     () => getTrickGroups(
-      snapshot.tricks.filter((trick) => trick.category === "grind_slide" && trick.stance === stanceTab),
+      snapshot.tricks.filter((trick) => trick.category === grindCategory && trick.stance === stanceTab),
       true,
     ),
-    [snapshot.tricks, stanceTab],
+    [snapshot.tricks, stanceTab, grindCategory],
   );
   const summary = useMemo(() => {
     const mastered = Object.values(assessments).reduce((sum, assessment) => sum + assessment.highestTier, 0);
@@ -113,21 +120,19 @@ export default function BaselineAssessment({
     return { mastered, ready, totalXp, level: getLevelData(totalXp).level };
   }, [assessments]);
 
-  const stanceRatingsComplete = STANCES.every((stance) => stanceComfort[stance]);
-  const assessmentComplete = snapshot.tricks.length === 84 &&
-    snapshot.progress.length >= 504 &&
-    snapshot.microSkills.length === 7 &&
-    stanceRatingsComplete;
+  const assessmentComplete = snapshot.tricks.length === 140 &&
+    snapshot.progress.length >= 840 &&
+    snapshot.microSkills.length === 7;
 
   function updateAssessment(trickId: string, value: TrickAssessment) {
     setAssessments((current) => ({ ...current, [trickId]: value }));
   }
 
-  function markStanceGrindsUnrated() {
+  function markRemainingStancesUnrated() {
     setAssessments((current) => {
       const next = { ...current };
       snapshot.tricks
-        .filter((trick) => trick.category === "grind_slide" && trick.stance === stanceTab)
+        .filter((trick) => trick.category === grindCategory && trick.stance !== stanceTab)
         .forEach((trick) => { next[trick.id] = { highestTier: 0, workingOnNext: false }; });
       return next;
     });
@@ -157,7 +162,7 @@ export default function BaselineAssessment({
             <div className="progression-brand-mark"><Footprints size={21} /></div>
             <div>
               <p className="progression-eyebrow">Skate / Progress</p>
-              <h1 id="baseline-title">Starting baseline</h1>
+              <h1 id="baseline-title">{snapshot.baseline ? "Recalibrate baseline" : "Starting baseline"}</h1>
             </div>
           </div>
           <span className="progression-baseline-step">{step} / 4</span>
@@ -178,29 +183,7 @@ export default function BaselineAssessment({
           <div className="progression-baseline-body">
             <p className="progression-eyebrow">Step 1 · about 30 seconds</p>
             <h2>Where are you starting from?</h2>
-            <p className="progression-modal-lede">Rate your comfort in each stance and credit the micro-skill hours you have already put in.</p>
-
-            <section className="progression-baseline-section">
-              <h3>Stance comfort</h3>
-              {STANCES.map((stance) => (
-                <div className="progression-comfort-row" key={stance}>
-                  <strong>{stance}</strong>
-                  <div className="progression-choice-pills" role="group" aria-label={`${stance} comfort`}>
-                    {COMFORT_LEVELS.map((comfort) => (
-                      <button
-                        key={comfort}
-                        type="button"
-                        aria-pressed={stanceComfort[stance] === comfort}
-                        className={stanceComfort[stance] === comfort ? "is-selected" : ""}
-                        onClick={() => setStanceComfort((current) => ({ ...current, [stance]: comfort }))}
-                      >
-                        {comfort}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </section>
+            <p className="progression-modal-lede">Credit hours you have already put into each micro-skill toward its 100-hour goal.</p>
 
             <section className="progression-baseline-section">
               <div className="progression-baseline-section-heading">
@@ -226,7 +209,7 @@ export default function BaselineAssessment({
               ))}
             </section>
 
-            <button className="progression-primary-button" disabled={!stanceRatingsComplete} onClick={() => setStep(2)}>
+            <button className="progression-primary-button" onClick={() => setStep(2)}>
               Flatground & gaps <ArrowRight size={17} />
             </button>
           </div>
@@ -255,17 +238,31 @@ export default function BaselineAssessment({
             </div>
             <div className="progression-baseline-actions">
               <button className="progression-secondary-button" onClick={() => setStep(1)}><ArrowLeft size={16} /> Back</button>
-              <button className="progression-primary-button" onClick={() => setStep(3)}>Grinds & slides <ArrowRight size={17} /></button>
+              <button className="progression-primary-button" onClick={() => setStep(3)}>Ledges & rails <ArrowRight size={17} /></button>
             </div>
           </div>
         )}
 
         {step === 3 && (
           <div className="progression-baseline-body">
-            <p className="progression-eyebrow">Step 3 · 56 tricks</p>
-            <h2>Grinds & slides</h2>
-            <p className="progression-modal-lede">Choose a stance to assess. Unrated tricks stay at zero; you can clear a whole stance with one tap.</p>
-            <div className="progression-stance-tabs" role="tablist" aria-label="Grind and slide stance">
+            <p className="progression-eyebrow">Step 3 · 112 tricks</p>
+            <h2>Ledges & rails</h2>
+            <p className="progression-modal-lede">Choose a category and stance. Unrated tricks stay at zero; you can clear the other stances with one tap.</p>
+            <div className="progression-stance-tabs" role="tablist" aria-label="Ledges or rails">
+              {(["ledge", "rail"] as const).map((category) => (
+                <button
+                  key={category}
+                  type="button"
+                  role="tab"
+                  aria-selected={grindCategory === category}
+                  className={grindCategory === category ? "is-selected" : ""}
+                  onClick={() => setGrindCategory(category)}
+                >
+                  {category === "ledge" ? "Ledges" : "Rails"}
+                </button>
+              ))}
+            </div>
+            <div className="progression-stance-tabs" role="tablist" aria-label={`${grindCategory} stance`}>
               {STANCES.map((stance) => (
                 <button
                   key={stance}
@@ -279,8 +276,8 @@ export default function BaselineAssessment({
                 </button>
               ))}
             </div>
-            <button className="progression-reset-stance" onClick={markStanceGrindsUnrated}>
-              <RotateCcw size={15} /> Mark all {stanceTab} grinds as 0
+            <button className="progression-reset-stance" onClick={markRemainingStancesUnrated}>
+              <RotateCcw size={15} /> Set remaining stances to 0
             </button>
             <div className="progression-baseline-trick-list">
               {grindGroups.map(([name, tricks]) => (
@@ -290,7 +287,7 @@ export default function BaselineAssessment({
                     <BaselineTrickRow
                       key={trick.id}
                       trick={trick}
-                      tiers={GRIND_TIERS}
+                      tiers={grindCategory === "ledge" ? LEDGE_TIERS : RAIL_TIERS}
                       assessment={assessments[trick.id] ?? { highestTier: 0, workingOnNext: false }}
                       onChange={(value) => updateAssessment(trick.id, value)}
                     />
@@ -309,7 +306,7 @@ export default function BaselineAssessment({
           <div className="progression-baseline-body progression-baseline-summary">
             <p className="progression-eyebrow">Step 4 · character card</p>
             <h2>Your starting point.</h2>
-            <p className="progression-modal-lede">These mastered tiers are credited now. The next unlocked tier for each trick will be ready in Cycle 1.</p>
+            <p className="progression-modal-lede">These mastered tiers are credited now. The next unlocked tier for each trick will be ready for your cycle.</p>
             <section className="progression-baseline-level-card">
               <div><span>Starting skate level</span><strong>{summary.level}</strong></div>
               <div><span>Total skate XP</span><strong>{summary.totalXp.toLocaleString()}</strong></div>
@@ -317,7 +314,7 @@ export default function BaselineAssessment({
             </section>
             <section className="progression-baseline-counts">
               <div><strong>{summary.mastered}</strong><span>Tiers mastered</span></div>
-              <div><strong>{summary.ready}</strong><span>Ready to level up</span></div>
+              <div><strong>{summary.ready}</strong><span>Next tiers unlocked</span></div>
             </section>
             <div className="progression-modal-footnote"><Sparkles size={16} /><span>Prior tiers will be marked mastered automatically. Current work on the next tier starts at score 1.</span></div>
             {!assessmentComplete && (
@@ -328,7 +325,7 @@ export default function BaselineAssessment({
             <div className="progression-baseline-actions">
               <button className="progression-secondary-button" disabled={busy} onClick={() => setStep(3)}><ArrowLeft size={16} /> Back</button>
               <button className="progression-primary-button" disabled={!assessmentComplete || busy} onClick={submitBaseline}>
-                {busy ? "Saving baseline..." : "Lock In Baseline & Pick Cycle 1"} <Check size={17} />
+                {busy ? "Saving baseline..." : "Save Baseline & Pick Cycle"} <Check size={17} />
               </button>
             </div>
           </div>

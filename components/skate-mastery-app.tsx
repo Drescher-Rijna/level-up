@@ -949,6 +949,12 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
                     ))}
                   </div>
                 </div>
+                <Link
+                  href="/progress?baseline=1"
+                  className="block w-full rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-center font-bold text-amber-200 transition hover:bg-amber-400/15"
+                >
+                  Recalibrate Baseline
+                </Link>
               </div>
             </section>
             </main>

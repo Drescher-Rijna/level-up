@@ -1,11 +1,23 @@
+-- Idempotent setup and upgrade script. Legacy grind progress stays on the ledge
+-- rows; new rail progress is initialized at zero, and flat/gap rows are untouched.
+
 create table if not exists public.tricks_catalog (
   id uuid primary key default gen_random_uuid(),
-  category text not null check (category in ('flat_gap', 'grind_slide')),
+  category text not null check (category in ('flat_gap', 'ledge', 'rail')),
   name text not null,
   direction text not null default 'none' check (direction in ('none', 'FS', 'BS')),
   stance text not null check (stance in ('Regular', 'Fakie', 'Nollie', 'Switch')),
   sort_order integer not null
 );
+
+alter table public.tricks_catalog
+  drop constraint if exists tricks_catalog_category_check;
+update public.tricks_catalog
+set category = 'ledge'
+where category = 'grind_slide';
+alter table public.tricks_catalog
+  add constraint tricks_catalog_category_check
+  check (category in ('flat_gap', 'ledge', 'rail'));
 
 create table if not exists public.user_trick_progress (
   id uuid primary key default gen_random_uuid(),
@@ -56,6 +68,11 @@ where old_skill.name = '2. Apex Flip Catch'
       and current_skill.name = '2. Apex Catch & Float'
   );
 
+update public.micro_skills
+set drill_description = '10-min Soft Knee Tuck: Ollie & flip over a stacked obstacle, tucking both knees high to armpits and waiting until descent before pushing down.',
+    overlay_cue = 'Catch at peak height with soft ankles—let gravity bring you and the board down together as one unit.'
+where name = '2. Apex Catch & Float';
+
 create table if not exists public.training_cycles (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -66,12 +83,15 @@ create table if not exists public.training_cycles (
   slot_a_progress_id uuid not null references public.user_trick_progress(id) on delete restrict,
   slot_b_progress_id uuid not null references public.user_trick_progress(id) on delete restrict,
   slot_c_progress_id uuid not null references public.user_trick_progress(id) on delete restrict,
-  check (
-    slot_a_progress_id <> slot_b_progress_id
-    and slot_a_progress_id <> slot_c_progress_id
-    and slot_b_progress_id <> slot_c_progress_id
-  )
+  slot_d_progress_id uuid references public.user_trick_progress(id) on delete restrict
 );
+
+alter table public.training_cycles
+  add column if not exists slot_d_progress_id uuid references public.user_trick_progress(id) on delete restrict;
+alter table public.training_cycles
+  drop constraint if exists training_cycles_check;
+alter table public.training_cycles
+  drop constraint if exists training_cycles_distinct_slots;
 
 create unique index if not exists training_cycles_one_active_per_user
   on public.training_cycles (user_id)
@@ -86,11 +106,17 @@ create table if not exists public.training_cycle_slot_completions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   cycle_id uuid not null references public.training_cycles(id) on delete cascade,
-  slot text not null check (slot in ('A', 'B', 'C')),
+  slot text not null check (slot in ('A', 'B', 'C', 'D')),
   progress_id uuid not null references public.user_trick_progress(id) on delete restrict,
   completed_at timestamptz not null default now(),
   unique (cycle_id, slot)
 );
+
+alter table public.training_cycle_slot_completions
+  drop constraint if exists training_cycle_slot_completions_slot_check;
+alter table public.training_cycle_slot_completions
+  add constraint training_cycle_slot_completions_slot_check
+  check (slot in ('A', 'B', 'C', 'D'));
 
 create table if not exists public.session_logs (
   id uuid primary key default gen_random_uuid(),
@@ -178,16 +204,21 @@ stances(name, stance_order) as (
   values ('Regular', 1), ('Fakie', 2), ('Nollie', 3), ('Switch', 4)
 )
 insert into public.tricks_catalog (category, name, direction, stance, sort_order)
-select 'grind_slide', grind_tricks.name, directions.name, stances.name,
+select categories.name, grind_tricks.name, directions.name, stances.name,
        (grind_tricks.trick_order - 1) * 8 + (directions.direction_order - 1) * 4 + stances.stance_order
-from grind_tricks cross join directions cross join stances
+from grind_tricks
+cross join directions
+cross join stances
+cross join (values ('ledge'), ('rail')) as categories(name)
 on conflict (category, name, direction, stance) do nothing;
 
 do $$
 begin
   if (select count(*) from public.tricks_catalog where category = 'flat_gap') <> 28
-     or (select count(*) from public.tricks_catalog where category = 'grind_slide') <> 56 then
-    raise exception 'The trick catalog must contain exactly 28 Flat / Gap and 56 Grind / Slide primitives.';
+     or (select count(*) from public.tricks_catalog where category = 'ledge') <> 56
+     or (select count(*) from public.tricks_catalog where category = 'rail') <> 56
+     or (select count(*) from public.tricks_catalog) <> 140 then
+    raise exception 'The trick catalog must contain exactly 28 Flat / Gap, 56 Ledge, and 56 Rail primitives.';
   end if;
 end;
 $$;
@@ -208,7 +239,7 @@ begin
   insert into public.micro_skills (user_id, name, drill_description, overlay_cue, benchmark_test)
   values
     (p_user_id, '1. High-Speed Setup', 'Push to a steady, controlled approach. Rehearse a compact crouch and foot placement on ten roll-ups.', 'Set your feet early; stay centered and commit at speed.', 'Land 8 of 10 ollies at a fast, controlled approach with a stable roll-away.'),
-    (p_user_id, '2. Apex Catch & Float', 'Warm up with ten low, controlled flick-and-catch reps before adding a rolling approach.', 'Watch the board through its apex, catch it over the bolts, and stay light through the landing.', 'Catch 8 of 10 kickflips over the bolts while rolling at a consistent speed and ride away with control.'),
+    (p_user_id, '2. Apex Catch & Float', '10-min Soft Knee Tuck: Ollie & flip over a stacked obstacle, tucking both knees high to armpits and waiting until descent before pushing down.', 'Catch at peak height with soft ankles—let gravity bring you and the board down together as one unit.', 'Catch 8 of 10 kickflips over the bolts while rolling at a consistent speed and ride away with control.'),
     (p_user_id, '3. Shoulder Discipline', 'Rehearse frontside and backside quarter turns while keeping shoulders aligned with the intended rotation.', 'Keep your shoulders quiet until the pop, then lead the rotation cleanly.', 'Land 8 of 10 FS/BS 180s with controlled shoulders and a straight ride-away.'),
     (p_user_id, '4. Active Pop-Out', 'Practice light, timely pop-outs from a low curb or ledge, focusing on lifting rather than kicking away.', 'Pop with intent; bring the board with you and land over the bolts.', 'Pop out cleanly and ride away on 8 of 10 low ledge or curb attempts.'),
     (p_user_id, '5. Early Target Lock', 'Before each approach, pick a visible landing point and rehearse keeping your eyes there through takeoff.', 'Find the landing early; keep your head level through contact.', 'Reach a chosen landing zone on 8 of 10 attempts without looking down at your feet.'),
@@ -245,6 +276,56 @@ begin
 end;
 $$;
 
+update public.training_cycles cycle
+set slot_d_progress_id = cycle.slot_c_progress_id,
+    slot_c_progress_id = (
+      select rail_progress.id
+      from public.user_trick_progress rail_progress
+      join public.tricks_catalog rail_trick on rail_trick.id = rail_progress.trick_id
+      where rail_progress.user_id = cycle.user_id
+        and rail_trick.category = 'rail'
+        and rail_progress.score between 0 and 2
+        and rail_progress.id not in (
+          cycle.slot_a_progress_id,
+          cycle.slot_b_progress_id,
+          cycle.slot_c_progress_id
+        )
+        and (
+          rail_progress.tier = 1
+          or exists (
+            select 1
+            from public.user_trick_progress previous_tier
+            where previous_tier.user_id = cycle.user_id
+              and previous_tier.trick_id = rail_progress.trick_id
+              and previous_tier.tier = rail_progress.tier - 1
+              and previous_tier.score = 3
+          )
+        )
+      order by rail_progress.tier, rail_trick.sort_order
+      limit 1
+    )
+where cycle.slot_d_progress_id is null;
+
+alter table public.training_cycles
+  alter column slot_d_progress_id set not null;
+alter table public.training_cycles
+  add constraint training_cycles_distinct_slots
+  check (
+    slot_a_progress_id <> slot_b_progress_id
+    and slot_a_progress_id <> slot_c_progress_id
+    and slot_a_progress_id <> slot_d_progress_id
+    and slot_b_progress_id <> slot_c_progress_id
+    and slot_b_progress_id <> slot_d_progress_id
+    and slot_c_progress_id <> slot_d_progress_id
+  );
+
+update public.training_cycle_slot_completions completion
+set slot = 'D'
+from public.training_cycles cycle
+where completion.cycle_id = cycle.id
+  and completion.slot = 'C'
+  and completion.progress_id = cycle.slot_d_progress_id;
+
 create or replace function public.complete_progression_baseline(
   p_stance_comfort jsonb,
   p_trick_assessments jsonb,
@@ -262,11 +343,9 @@ declare
   changed_rows integer;
 begin
   if current_user_id is null then raise exception 'Sign in is required.'; end if;
-  if exists (
-    select 1 from public.training_cycles where user_id = current_user_id
-  ) then
-    raise exception 'The baseline cannot be reset after a training cycle has started.';
-  end if;
+  update public.training_cycles
+  set status = 'completed'
+  where user_id = current_user_id and status = 'active';
 
   if jsonb_typeof(p_stance_comfort) is distinct from 'object' then
     raise exception 'Rate all four stances before saving the baseline.';
@@ -285,21 +364,21 @@ begin
   end if;
 
   if jsonb_typeof(p_trick_assessments) is distinct from 'array' then
-    raise exception 'Assess all 84 tricks before saving the baseline.';
+    raise exception 'Assess all 140 tricks before saving the baseline.';
   end if;
-  if jsonb_array_length(p_trick_assessments) <> 84
-     or (select count(*) from public.tricks_catalog) <> 84
+  if jsonb_array_length(p_trick_assessments) <> 140
+     or (select count(*) from public.tricks_catalog) <> 140
      or (
        select count(distinct item.trick_id)
        from jsonb_to_recordset(p_trick_assessments) as item(trick_id uuid)
-     ) <> 84
+     ) <> 140
      or exists (
        select 1
        from jsonb_to_recordset(p_trick_assessments) as item(trick_id uuid)
        left join public.tricks_catalog trick on trick.id = item.trick_id
        where trick.id is null
      ) then
-    raise exception 'Assess all 84 tricks before saving the baseline.';
+    raise exception 'Assess all 140 tricks before saving the baseline.';
   end if;
 
   if jsonb_typeof(p_skill_hours) is distinct from 'array' then
@@ -400,11 +479,14 @@ as $$
   );
 $$;
 
+drop function if exists public.create_training_cycle(uuid, uuid, uuid, uuid);
+
 create or replace function public.create_training_cycle(
   p_active_micro_skill_id uuid,
   p_slot_a_progress_id uuid,
   p_slot_b_progress_id uuid,
-  p_slot_c_progress_id uuid
+  p_slot_c_progress_id uuid,
+  p_slot_d_progress_id uuid
 )
 returns uuid
 language plpgsql
@@ -427,7 +509,10 @@ begin
   end if;
   if p_slot_a_progress_id = p_slot_b_progress_id
      or p_slot_a_progress_id = p_slot_c_progress_id
-     or p_slot_b_progress_id = p_slot_c_progress_id then
+     or p_slot_a_progress_id = p_slot_d_progress_id
+     or p_slot_b_progress_id = p_slot_c_progress_id
+     or p_slot_b_progress_id = p_slot_d_progress_id
+     or p_slot_c_progress_id = p_slot_d_progress_id then
     raise exception 'Choose a different trick for each quest slot.';
   end if;
   if not exists (
@@ -437,18 +522,21 @@ begin
   if not public.progression_is_eligible(current_user_id, p_slot_a_progress_id, 'flat_gap', false) then
     raise exception 'Slot A needs an eligible Flat / Gap trick.';
   end if;
-  if not public.progression_is_eligible(current_user_id, p_slot_b_progress_id, 'grind_slide', false) then
-    raise exception 'Slot B needs an eligible Grind / Slide trick.';
+  if not public.progression_is_eligible(current_user_id, p_slot_b_progress_id, 'ledge', false) then
+    raise exception 'Slot B needs an eligible Ledge trick.';
   end if;
-  if not public.progression_is_eligible(current_user_id, p_slot_c_progress_id, null, true) then
-    raise exception 'Slot C needs an eligible Fakie, Nollie, or Switch trick.';
+  if not public.progression_is_eligible(current_user_id, p_slot_c_progress_id, 'rail', false) then
+    raise exception 'Slot C needs an eligible Rail trick.';
+  end if;
+  if not public.progression_is_eligible(current_user_id, p_slot_d_progress_id, null, true) then
+    raise exception 'Slot D needs an eligible Fakie, Nollie, or Switch trick.';
   end if;
 
   insert into public.training_cycles (
-    user_id, active_micro_skill_id, slot_a_progress_id, slot_b_progress_id, slot_c_progress_id
+    user_id, active_micro_skill_id, slot_a_progress_id, slot_b_progress_id, slot_c_progress_id, slot_d_progress_id
   )
   values (
-    current_user_id, p_active_micro_skill_id, p_slot_a_progress_id, p_slot_b_progress_id, p_slot_c_progress_id
+    current_user_id, p_active_micro_skill_id, p_slot_a_progress_id, p_slot_b_progress_id, p_slot_c_progress_id, p_slot_d_progress_id
   )
   returning id into new_cycle_id;
 
@@ -478,31 +566,37 @@ begin
   where id = p_cycle_id and user_id = current_user_id and status = 'active' and end_date >= current_date
   for update;
   if not found then raise exception 'The active cycle was not found.'; end if;
-  if p_slot is null or p_slot not in ('A', 'B', 'C') then raise exception 'Choose a valid quest slot.'; end if;
+  if p_slot is null or p_slot not in ('A', 'B', 'C', 'D') then raise exception 'Choose a valid quest slot.'; end if;
 
   if (
     (p_slot = 'A' and not exists (select 1 from public.user_trick_progress where id = current_cycle.slot_a_progress_id and user_id = current_user_id and score = 3))
     or (p_slot = 'B' and not exists (select 1 from public.user_trick_progress where id = current_cycle.slot_b_progress_id and user_id = current_user_id and score = 3))
     or (p_slot = 'C' and not exists (select 1 from public.user_trick_progress where id = current_cycle.slot_c_progress_id and user_id = current_user_id and score = 3))
+    or (p_slot = 'D' and not exists (select 1 from public.user_trick_progress where id = current_cycle.slot_d_progress_id and user_id = current_user_id and score = 3))
   ) then
     raise exception 'Master the current slot before choosing its next quest.';
   end if;
 
-  expected_category := case p_slot when 'A' then 'flat_gap' when 'B' then 'grind_slide' else null end;
-  weak_only := p_slot = 'C';
+  expected_category := case p_slot when 'A' then 'flat_gap' when 'B' then 'ledge' when 'C' then 'rail' else null end;
+  weak_only := p_slot = 'D';
   if not public.progression_is_eligible(current_user_id, p_progress_id, expected_category, weak_only) then
     raise exception 'That trick is locked or does not match this quest slot.';
   end if;
   if (p_slot <> 'A' and current_cycle.slot_a_progress_id = p_progress_id)
      or (p_slot <> 'B' and current_cycle.slot_b_progress_id = p_progress_id)
-     or (p_slot <> 'C' and current_cycle.slot_c_progress_id = p_progress_id) then
+     or (p_slot <> 'C' and current_cycle.slot_c_progress_id = p_progress_id)
+     or (p_slot <> 'D' and current_cycle.slot_d_progress_id = p_progress_id) then
     raise exception 'Choose a trick that is not already in another slot.';
   end if;
+
+  delete from public.training_cycle_slot_completions
+  where cycle_id = p_cycle_id and slot = p_slot;
 
   update public.training_cycles
   set slot_a_progress_id = case when p_slot = 'A' then p_progress_id else slot_a_progress_id end,
       slot_b_progress_id = case when p_slot = 'B' then p_progress_id else slot_b_progress_id end,
-      slot_c_progress_id = case when p_slot = 'C' then p_progress_id else slot_c_progress_id end
+      slot_c_progress_id = case when p_slot = 'C' then p_progress_id else slot_c_progress_id end,
+      slot_d_progress_id = case when p_slot = 'D' then p_progress_id else slot_d_progress_id end
   where id = p_cycle_id and user_id = current_user_id;
 end;
 $$;
@@ -539,6 +633,7 @@ begin
     when current_cycle.slot_a_progress_id = p_progress_id then 'A'
     when current_cycle.slot_b_progress_id = p_progress_id then 'B'
     when current_cycle.slot_c_progress_id = p_progress_id then 'C'
+    when current_cycle.slot_d_progress_id = p_progress_id then 'D'
     else null
   end;
   if matched_slot is null then raise exception 'That trick is not an active quest.'; end if;
@@ -575,13 +670,9 @@ begin
     on conflict (cycle_id, slot) do nothing;
   end if;
 
-  select count(*) = 3 into cycle_is_complete
+  select count(*) = 4 into cycle_is_complete
   from public.training_cycle_slot_completions
   where cycle_id = current_cycle.id;
-
-  if cycle_is_complete then
-    update public.training_cycles set status = 'completed' where id = current_cycle.id;
-  end if;
 
   return jsonb_build_object(
     'score', next_score,
@@ -615,7 +706,8 @@ begin
   if p_progress_id not in (
     current_cycle.slot_a_progress_id,
     current_cycle.slot_b_progress_id,
-    current_cycle.slot_c_progress_id
+    current_cycle.slot_c_progress_id,
+    current_cycle.slot_d_progress_id
   ) then raise exception 'That trick is not an active quest.'; end if;
 
   update public.user_trick_progress
@@ -753,13 +845,13 @@ revoke all on function public.seed_user_progression(uuid) from public;
 revoke all on function public.handle_new_progression_user() from public;
 revoke all on function public.progression_is_eligible(uuid, uuid, text, boolean) from public;
 revoke all on function public.complete_progression_baseline(jsonb, jsonb, jsonb) from public;
-revoke all on function public.create_training_cycle(uuid, uuid, uuid, uuid) from public;
+revoke all on function public.create_training_cycle(uuid, uuid, uuid, uuid, uuid) from public;
 revoke all on function public.replace_training_cycle_slot(uuid, text, uuid) from public;
 revoke all on function public.record_progression_make(uuid, uuid, boolean) from public;
 revoke all on function public.record_progression_miss(uuid, uuid) from public;
 revoke all on function public.log_progression_session(integer, text, boolean, boolean, text) from public;
 revoke all on function public.set_micro_skill_benchmark(uuid, boolean) from public;
-grant execute on function public.create_training_cycle(uuid, uuid, uuid, uuid) to authenticated;
+grant execute on function public.create_training_cycle(uuid, uuid, uuid, uuid, uuid) to authenticated;
 grant execute on function public.complete_progression_baseline(jsonb, jsonb, jsonb) to authenticated;
 grant execute on function public.replace_training_cycle_slot(uuid, text, uuid) to authenticated;
 grant execute on function public.record_progression_make(uuid, uuid, boolean) to authenticated;

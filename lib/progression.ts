@@ -2,9 +2,9 @@ import { progressionSupabase } from "@/lib/progression-supabase";
 import { DEFAULT_TASKS, DEFAULT_USER_PROFILE, getCurrentDateKey } from "@/lib/game";
 import type { Task } from "@/lib/game";
 
-export type TrickCategory = "flat_gap" | "grind_slide";
+export type TrickCategory = "flat_gap" | "ledge" | "rail";
 export type Stance = "Regular" | "Fakie" | "Nollie" | "Switch";
-export type QuestSlot = "A" | "B" | "C";
+export type QuestSlot = "A" | "B" | "C" | "D";
 export type StanceComfort = "Beginner" | "Solid" | "Advanced";
 export type StanceComfortRatings = Record<Stance, StanceComfort>;
 
@@ -46,6 +46,7 @@ export type TrainingCycle = {
   slot_a_progress_id: string;
   slot_b_progress_id: string;
   slot_c_progress_id: string;
+  slot_d_progress_id: string;
 };
 
 export type SessionLog = {
@@ -117,7 +118,7 @@ export async function loadProgressionSnapshot(userId: string): Promise<Progressi
       client.from("tricks_catalog").select("id, category, name, direction, stance, sort_order").order("sort_order"),
       client.from("user_trick_progress").select("id, trick_id, tier, score, attempts, makes, consecutive_makes").eq("user_id", userId),
       client.from("micro_skills").select("id, name, drill_description, overlay_cue, benchmark_test, logged_minutes, benchmark_passed").eq("user_id", userId).order("name"),
-      client.from("training_cycles").select("id, start_date, end_date, status, active_micro_skill_id, slot_a_progress_id, slot_b_progress_id, slot_c_progress_id").eq("user_id", userId).eq("status", "active").order("start_date", { ascending: false }).limit(1).maybeSingle(),
+      client.from("training_cycles").select("id, start_date, end_date, status, active_micro_skill_id, slot_a_progress_id, slot_b_progress_id, slot_c_progress_id, slot_d_progress_id").eq("user_id", userId).eq("status", "active").order("start_date", { ascending: false }).limit(1).maybeSingle(),
       client.from("session_logs").select("id, session_date, duration_minutes, session_type, filmed_diagnostic, active_quest_work, warmup_minutes, overlay_minutes").eq("user_id", userId).gte("session_date", startDate).order("session_date", { ascending: false }),
       client.from("playtime_vault").select("id, trick_name, obstacle, parent_tricks, first_landed_at, is_consistent").eq("user_id", userId).order("created_at", { ascending: false }),
       client.from("user_progression_baselines").select("stance_comfort, completed_at").eq("user_id", userId).maybeSingle(),
@@ -202,8 +203,9 @@ export function eligibleProgress(
       const trick = tricksById.get(progress.trick_id);
       if (!trick || progress.score >= 3 || excludedIds.includes(progress.id)) return false;
       if (slot === "A" && trick.category !== "flat_gap") return false;
-      if (slot === "B" && trick.category !== "grind_slide") return false;
-      if (slot === "C" && trick.stance === "Regular") return false;
+      if (slot === "B" && trick.category !== "ledge") return false;
+      if (slot === "C" && trick.category !== "rail") return false;
+      if (slot === "D" && trick.stance === "Regular") return false;
       return progress.tier === 1 || scores.get(`${progress.trick_id}:${progress.tier - 1}`) === 3;
     })
     .sort((first, second) => {
@@ -230,12 +232,14 @@ export async function createTrainingCycle(input: {
   slotAProgressId: string;
   slotBProgressId: string;
   slotCProgressId: string;
+  slotDProgressId: string;
 }) {
   const { data, error } = await getClient().rpc("create_training_cycle", {
     p_active_micro_skill_id: input.activeMicroSkillId,
     p_slot_a_progress_id: input.slotAProgressId,
     p_slot_b_progress_id: input.slotBProgressId,
     p_slot_c_progress_id: input.slotCProgressId,
+    p_slot_d_progress_id: input.slotDProgressId,
   });
   throwOnError(error);
   return data as string;
