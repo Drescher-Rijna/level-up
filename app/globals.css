@@ -1457,7 +1457,7 @@ a {
   position: relative;
   display: flex;
   min-width: 0;
-  min-height: 42px;
+  min-height: 58px;
   align-items: center;
   justify-content: center;
   gap: 4px;
@@ -1467,8 +1467,23 @@ a {
   color: #d2d7cc;
   cursor: pointer;
   font-family: inherit;
-  padding: 0;
+  padding: 5px 3px;
   appearance: none;
+}
+
+.progression-tier-badge-content {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  text-align: center;
+}
+
+.progression-tier-badge-content small {
+  width: 100%;
+  overflow-wrap: anywhere;
+  line-height: 1.15;
 }
 
 .progression-tier-badge:focus-visible {

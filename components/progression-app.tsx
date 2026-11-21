@@ -118,6 +118,10 @@ function getTrickById(snapshot: ProgressionSnapshot, id: string | undefined) {
   return snapshot.tricks.find((trick) => trick.id === id);
 }
 
+function getObstacleName(category: TrickCategory, tier: number) {
+  return TIER_GUIDES[category][tier - 1] ?? "Unknown obstacle";
+}
+
 function formatHours(minutes: number) {
   return `${(minutes / 60).toFixed(1)} / 100 hrs`;
 }
@@ -913,7 +917,7 @@ function TodayScreen({
                     {completed && <button className="progression-mini-button" onClick={() => onChooseQuest(key)} aria-label={`Choose the next slot ${key} trick`}><RotateCcw size={15} /></button>}
                   </div>
                   <div className="progression-trick-line">
-                    <div><h3>{getTrickName(trick)}</h3><p>{trick?.stance ?? "Choose a trick"} stance · Tier {progress?.tier ?? "—"}</p></div>
+                    <div><h3>{getTrickName(trick)}</h3><p>{trick?.stance ?? "Choose a trick"} stance · Tier {progress?.tier ?? "—"}{trick && progress ? ` · ${getObstacleName(trick.category, progress.tier)}` : ""}</p></div>
                     {completed && <span className="progression-mastered"><Trophy size={14} /> Mastered</span>}
                   </div>
                   <div className="progression-streak" aria-label={`${progress?.consecutive_makes ?? 0} of 3 clean makes`}>
@@ -1089,16 +1093,21 @@ function SkillTreeScreen({
                 const locked = progress.tier > 1 && (progressByTrick.get(trick.id)?.find((item) => item.tier === progress.tier - 1)?.score ?? 0) !== 3;
                 const videos = snapshot.videos.find((item) => item.progress_id === progress.id);
                 const hasVideos = Boolean(videos?.day1_video_url || videos?.tier_complete_video_url);
+                const obstacle = getObstacleName(trick.category, progress.tier);
                 return (
                   <button
                     key={progress.id}
                     type="button"
                     className={`progression-tier-badge tier-${progress.score}${locked ? " is-locked" : ""}`}
-                    aria-label={`${getTrickName(trick)}, tier ${progress.tier}${locked ? ", locked" : `, score ${progress.score}`}. ${hasVideos ? "Edit comparison videos." : "Add comparison videos."}`}
+                    aria-label={`${getTrickName(trick)}, tier ${progress.tier}, ${obstacle}${locked ? ", locked" : `, score ${progress.score}`}. ${hasVideos ? "Edit comparison videos." : "Add comparison videos."}`}
                     title="Add or edit Day 1 and tier-complete videos"
                     onClick={() => setEditingProgress(progress)}
                   >
-                    {locked ? <LockKeyhole size={12} /> : <><small>T{progress.tier}</small><strong>{progress.score}</strong></>}
+                    {locked ? (
+                      <span className="progression-tier-badge-content"><small>T{progress.tier} · {obstacle}</small><LockKeyhole size={12} /></span>
+                    ) : (
+                      <span className="progression-tier-badge-content"><small>T{progress.tier} · {obstacle}</small><strong>{progress.score}</strong></span>
+                    )}
                     {hasVideos && <Camera className="progression-tier-video-icon" size={10} aria-hidden="true" />}
                   </button>
                 );
@@ -1198,7 +1207,7 @@ function TrickVideosModal({
             <X size={18} />
           </button>
         </header>
-        <p className="progression-eyebrow">Trick progress · Tier {progress.tier}</p>
+        <p className="progression-eyebrow">Trick progress · Tier {progress.tier}{trick ? ` · ${getObstacleName(trick.category, progress.tier)}` : ""}</p>
         <h2 id="trick-video-title">{trick ? getTrickName(trick) : "Trick videos"}</h2>
         <p className="progression-modal-lede">Add a Day 1 clip and a tier-complete clip to compare how this trick developed.</p>
         <form className="progression-video-form" onSubmit={(event) => void submit(event)}>
@@ -1448,7 +1457,7 @@ function CycleSetupModal({
                 <option value="">Choose an eligible trick</option>
                 {candidates[slot].map((progress) => {
                   const trick = snapshot.tricks.find((item) => item.id === progress.trick_id);
-                  return <option key={progress.id} value={progress.id}>{trick ? getTrickLabel(trick) : "Trick"} · T{progress.tier} · {progress.score}/3</option>;
+                  return <option key={progress.id} value={progress.id}>{trick ? getTrickLabel(trick) : "Trick"} · T{progress.tier} · {trick ? getObstacleName(trick.category, progress.tier) : "Unknown obstacle"} · {progress.score}/3</option>;
                 })}
               </select>
               {!candidates[slot].length && <small className="progression-field-help">No eligible tricks remain for this slot.</small>}
@@ -1514,7 +1523,7 @@ function QuestPickerDrawer({
             return (
               <button key={progress.id} className="progression-picker-option" disabled={busy} onClick={() => onChoose(progress.id)}>
                 <span className="progression-picker-tier">T{progress.tier}</span>
-                <span className="progression-picker-name"><strong>{trick ? getTrickLabel(trick) : "Trick unavailable"}</strong><small>{progress.score === 0 ? "Not unlocked" : progress.score === 1 ? "Landed" : "Consistent"} · {progress.consecutive_makes}/3 streak</small></span>
+                <span className="progression-picker-name"><strong>{trick ? getTrickLabel(trick) : "Trick unavailable"}</strong><small>{trick ? getObstacleName(trick.category, progress.tier) : "Unknown obstacle"} · {progress.score === 0 ? "Not unlocked" : progress.score === 1 ? "Landed" : "Consistent"} · {progress.consecutive_makes}/3 streak</small></span>
                 <ArrowUpRight size={17} />
               </button>
             );
