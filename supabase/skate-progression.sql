@@ -350,7 +350,7 @@ begin
   if jsonb_typeof(p_stance_comfort) is distinct from 'object' then
     raise exception 'Rate all four stances before saving the baseline.';
   end if;
-  if jsonb_object_length(p_stance_comfort) <> 4
+  if (select count(*) from jsonb_each_text(p_stance_comfort)) <> 4
      or exists (
        select 1 from jsonb_each_text(p_stance_comfort) as rating(key, value)
        where rating.key not in ('Regular', 'Fakie', 'Nollie', 'Switch')
