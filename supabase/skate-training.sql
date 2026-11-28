@@ -1,5 +1,5 @@
 -- Data model for the full-cycle skate training workflow.
--- Existing progression tables are retained so prior records are not deleted.
+-- Legacy progression tables are retained; the current catalog uses side-specific Grind and Slide tricks.
 
 create table if not exists public.skate_trick_families (
   id text primary key,
@@ -227,6 +227,61 @@ insert into public.skate_stances (id, sort_order)
 values ('Regular', 1), ('Switch', 2), ('Nollie', 3), ('Fakie', 4)
 on conflict (id) do update set sort_order = excluded.sort_order;
 
+do $$
+declare
+  obsolete_trick_ids uuid[];
+begin
+  select array_agg(trick.id)
+  into obsolete_trick_ids
+  from public.skate_tricks trick
+  where (trick.family_id = 'grinds' and trick.name in (
+      '50-50', '5-0', 'Nosegrind', 'Feeble', 'Smith', 'Crook'
+    ))
+    or (trick.family_id = 'slides' and trick.name in (
+      'Boardslide', 'Lipslide', 'Noseslide', 'Tailslide'
+    ));
+
+  if obsolete_trick_ids is not null then
+    if exists (
+      select 1
+      from public.skate_trick_stance_eligibility eligibility
+      where eligibility.trick_id = any(obsolete_trick_ids)
+        and not eligibility.eligible
+    ) or exists (
+      select 1
+      from public.skate_progression_stages stage
+      where stage.trick_id = any(obsolete_trick_ids)
+    ) or exists (
+      select 1
+      from public.skate_trick_stance_progress progress
+      where progress.trick_id = any(obsolete_trick_ids)
+        and progress.current_stage_id is not null
+    ) or exists (
+      select 1
+      from public.skate_cycle_eligible_combinations combination
+      where combination.trick_id = any(obsolete_trick_ids)
+    ) or exists (
+      select 1
+      from public.skate_cycle_session_tricks assignment
+      where assignment.trick_id = any(obsolete_trick_ids)
+    ) or exists (
+      select 1
+      from public.skate_progression_history history
+      where history.trick_id = any(obsolete_trick_ids)
+    ) then
+      raise exception 'Old unsided Grind/Slide tricks have user progress or cycle history. Resolve that data before replacing the catalog.';
+    end if;
+
+    delete from public.skate_trick_stance_eligibility
+    where trick_id = any(obsolete_trick_ids);
+    delete from public.skate_trick_stance_progress
+    where trick_id = any(obsolete_trick_ids);
+    delete from public.skate_tricks
+    where id = any(obsolete_trick_ids);
+  end if;
+end;
+$$;
+
 with seed(family_id, name, sort_order) as (
   values
     ('flatground', 'Ollie', 1),
@@ -236,16 +291,26 @@ with seed(family_id, name, sort_order) as (
     ('flatground', 'FS 180', 5),
     ('flatground', 'Kickflip', 6),
     ('flatground', 'Heelflip', 7),
-    ('grinds', '50-50', 1),
-    ('grinds', '5-0', 2),
-    ('grinds', 'Nosegrind', 3),
-    ('grinds', 'Feeble', 4),
-    ('grinds', 'Smith', 5),
-    ('grinds', 'Crook', 6),
-    ('slides', 'Boardslide', 1),
-    ('slides', 'Lipslide', 2),
-    ('slides', 'Noseslide', 3),
-    ('slides', 'Tailslide', 4),
+    ('grinds', 'BS 50-50', 1),
+    ('grinds', 'FS 50-50', 2),
+    ('grinds', 'BS 5-0', 3),
+    ('grinds', 'FS 5-0', 4),
+    ('grinds', 'BS Nosegrind', 5),
+    ('grinds', 'FS Nosegrind', 6),
+    ('grinds', 'BS Feeble', 7),
+    ('grinds', 'FS Feeble', 8),
+    ('grinds', 'BS Smith', 9),
+    ('grinds', 'FS Smith', 10),
+    ('grinds', 'BS Crook', 11),
+    ('grinds', 'FS Crook', 12),
+    ('slides', 'BS Boardslide', 1),
+    ('slides', 'FS Boardslide', 2),
+    ('slides', 'BS Lipslide', 3),
+    ('slides', 'FS Lipslide', 4),
+    ('slides', 'BS Noseslide', 5),
+    ('slides', 'FS Noseslide', 6),
+    ('slides', 'BS Tailslide', 7),
+    ('slides', 'FS Tailslide', 8),
     ('manuals', 'Manual', 1),
     ('manuals', 'Nosemanual', 2),
     ('transition', 'Rock to fakie', 1),
@@ -261,14 +326,22 @@ on conflict (family_id, name) do update set sort_order = excluded.sort_order;
 
 do $$
 begin
-  if (select count(*) from public.skate_tricks) <> 25 then
-    raise exception 'The skate training catalog must contain exactly 25 tricks.';
+  if (select count(*) from public.skate_tricks) <> 35 then
+    raise exception 'The skate training catalog must contain exactly 35 tricks.';
+  end if;
+  if (select count(*) from public.skate_tricks where family_id = 'grinds') <> 12 then
+    raise exception 'The skate training catalog must contain exactly 12 Grinds.';
+  end if;
+  if (select count(*) from public.skate_tricks where family_id = 'slides') <> 8 then
+    raise exception 'The skate training catalog must contain exactly 8 Slides.';
   end if;
   if not exists (
     select 1
     from public.skate_tricks transition_5050
-    join public.skate_tricks grind_5050 on grind_5050.name = transition_5050.name
+    join public.skate_tricks grind_5050
+      on grind_5050.name in ('BS 50-50', 'FS 50-50')
     where transition_5050.family_id = 'transition'
+      and transition_5050.name = '50-50'
       and grind_5050.family_id = 'grinds'
       and transition_5050.id <> grind_5050.id
   ) then
@@ -277,7 +350,8 @@ begin
   if not exists (
     select 1
     from public.skate_tricks transition_50
-    join public.skate_tricks grind_50 on grind_50.name = transition_50.name
+    join public.skate_tricks grind_50
+      on grind_50.name in ('BS 5-0', 'FS 5-0')
     where transition_50.family_id = 'transition'
       and grind_50.family_id = 'grinds'
       and transition_50.name = '5-0'

@@ -176,6 +176,27 @@ function requireSuccess(result: { error: { message: string } | null }, operation
   }
 }
 
+const SUPABASE_PAGE_SIZE = 1000;
+
+async function loadAllPages<T>(
+  resource: string,
+  fetchPage: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<T[]> {
+  const rows: T[] = [];
+
+  for (let from = 0; ; from += SUPABASE_PAGE_SIZE) {
+    const page = requireData<T[]>(
+      await fetchPage(from, from + SUPABASE_PAGE_SIZE - 1),
+      resource,
+    );
+    rows.push(...page);
+    if (page.length < SUPABASE_PAGE_SIZE) return rows;
+  }
+}
+
 export async function loadSkateTrainingData(userId: string): Promise<SkateTrainingData> {
   const client = getClient();
   const [
@@ -185,12 +206,12 @@ export async function loadSkateTrainingData(userId: string): Promise<SkateTraini
     metaSkillsResult,
     labelsResult,
     eligibilityResult,
-    stagesResult,
+    stages,
     progressResult,
     settingsResult,
     cycleResult,
     practicesResult,
-    progressionHistoryResult,
+    progressionHistory,
   ] = await Promise.all([
     client.from("skate_trick_families").select("id, name, sort_order").order("sort_order"),
     client.from("skate_tricks").select("id, family_id, name, sort_order").order("sort_order"),
@@ -198,12 +219,30 @@ export async function loadSkateTrainingData(userId: string): Promise<SkateTraini
     client.from("skate_meta_skills").select("id, name, sort_order").eq("user_id", userId).order("sort_order"),
     client.from("skate_level_labels").select("id, name").eq("user_id", userId).order("name"),
     client.from("skate_trick_stance_eligibility").select("id, trick_id, stance_id, eligible").eq("user_id", userId),
-    client.from("skate_progression_stages").select("id, trick_id, stance_id, label_id, position").eq("user_id", userId).order("position"),
+    loadAllPages<SkateProgressionStage>(
+      "trick progression stages",
+      (from, to) => client.from("skate_progression_stages")
+        .select("id, trick_id, stance_id, label_id, position")
+        .eq("user_id", userId)
+        .order("trick_id")
+        .order("stance_id")
+        .order("position")
+        .order("id")
+        .range(from, to),
+    ),
     client.from("skate_trick_stance_progress").select("trick_id, stance_id, current_stage_id").eq("user_id", userId),
     client.from("skate_training_settings").select("sets_per_trick, attempts_per_set, benchmark_landed").eq("user_id", userId).maybeSingle(),
     client.from("skate_cycles").select("id, meta_skill_id, status, eligible_combinations, created_at, confirmed_at, completed_at").eq("user_id", userId).in("status", ["draft", "active"]).order("created_at", { ascending: false }).limit(1).maybeSingle(),
     client.from("skate_practice_sessions").select("id, cycle_id, cycle_session_id, duration_minutes, notes, completed_at").eq("user_id", userId).order("completed_at", { ascending: false }).limit(30),
-    client.from("skate_progression_history").select("id, trick_id, stance_id, from_label, to_label, practice_session_id, advanced_at").eq("user_id", userId).order("advanced_at", { ascending: false }),
+    loadAllPages<SkateProgressionHistory>(
+      "progression history",
+      (from, to) => client.from("skate_progression_history")
+        .select("id, trick_id, stance_id, from_label, to_label, practice_session_id, advanced_at")
+        .eq("user_id", userId)
+        .order("advanced_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, to),
+    ),
   ]);
 
   const cycle = requireData<SkateCycle | null>(cycleResult, "the current cycle");
@@ -253,7 +292,7 @@ export async function loadSkateTrainingData(userId: string): Promise<SkateTraini
     metaSkills: requireData<SkateMetaSkill[]>(metaSkillsResult, "meta-skills"),
     labels: requireData<SkateLevelLabel[]>(labelsResult, "level labels"),
     eligibility: requireData<SkateEligibility[]>(eligibilityResult, "trick eligibility"),
-    stages: requireData<SkateProgressionStage[]>(stagesResult, "trick progression stages"),
+    stages,
     progress: requireData<SkateTrickStanceProgress[]>(progressResult, "trick progression"),
     settings,
     cycle,
@@ -266,7 +305,7 @@ export async function loadSkateTrainingData(userId: string): Promise<SkateTraini
     sessionDrafts: requireData<SkateCycleSessionDraft[]>(draftsResult, "session drafts"),
     practices,
     setResults: requireData<SkateSetResult[]>(setResultsResult, "set results"),
-    progressionHistory: requireData<SkateProgressionHistory[]>(progressionHistoryResult, "progression history"),
+    progressionHistory,
   };
 }
 
