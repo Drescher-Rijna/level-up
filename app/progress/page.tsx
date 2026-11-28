@@ -1,10 +1,5 @@
-import ProgressionApp from "@/components/progression-app";
+import SkateTrainingApp from "@/components/skate-training-app";
 
-export default async function ProgressPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ baseline?: string | string[] }>;
-}) {
-  const { baseline } = await searchParams;
-  return <ProgressionApp openBaseline={baseline === "1"} />;
+export default function ProgressPage() {
+  return <SkateTrainingApp initialSection="cycles" />;
 }

@@ -1,7 +1,7 @@
 {
-  "name": "Skate / Progress",
-  "short_name": "SkateProgress",
-  "description": "A five-year skateboarding progression and motor-learning companion.",
+  "name": "Skate Training",
+  "short_name": "Skate",
+  "description": "Plan complete skate practice cycles and track trick-by-trick progression.",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait-primary",

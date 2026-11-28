@@ -14,13 +14,13 @@ const bodyFont = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Skate / Progress",
-  description: "A five-year skateboarding progression and motor-learning companion.",
-  applicationName: "Skate / Progress",
+  title: "Skate Training",
+  description: "Plan complete skate practice cycles, log sessions and progress trick by trick.",
+  applicationName: "Skate Training",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Skate / Progress",
+    title: "Skate Training",
   },
 };
 

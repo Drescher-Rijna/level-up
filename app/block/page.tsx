@@ -1,5 +1,5 @@
-import SkateMasteryApp from "@/components/skate-mastery-app";
+import { redirect } from "next/navigation";
 
-export default function BlockPage() {
-  return <SkateMasteryApp view="block" />;
+export default function BlockPage(): never {
+  redirect("/");
 }

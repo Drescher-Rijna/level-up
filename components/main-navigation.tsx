@@ -2,18 +2,16 @@
 
 import {
   Dumbbell,
-  House,
-  Network,
-  Plus,
+  Footprints,
+  HeartPulse,
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
 
 const TABS = [
-  { label: "Today", href: "/", icon: House },
-  { label: "Train", href: "/workouts", icon: Dumbbell },
-  { label: "Progress", href: "/progress", icon: Network },
-  { label: "Log", href: "/stats", icon: Plus },
+  { label: "Skate", href: "/", icon: Footprints },
+  { label: "Workout", href: "/workouts", icon: Dumbbell },
+  { label: "Recovery", href: "/stats", icon: HeartPulse },
   { label: "Me", href: "/settings", icon: UserRound },
 ] as const;
 

@@ -1,5 +1,5 @@
-import SkateMasteryApp from "@/components/skate-mastery-app";
+import { redirect } from "next/navigation";
 
-export default function CalendarPage() {
-  return <SkateMasteryApp view="calendar" />;
+export default function CalendarPage(): never {
+  redirect("/");
 }

@@ -10,9 +10,7 @@ import {
   DEFAULT_TOTAL_SKATE_HOURS,
   DEFAULT_TOTAL_XP,
   DEFAULT_USER_PROFILE,
-  DAILY_CHECKLIST_TASK_IDS,
   STAT_META,
-  type StatKey,
   type Task,
   getCurrentDateKey,
   getCurrentStreak,
@@ -407,8 +405,6 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
     );
   }
 
-  const statEntries = Object.entries(STAT_META) as [StatKey, (typeof STAT_META)[StatKey]][];
-
   async function awardTaskXp(task: Task) {
     if (appState.completedToday[task.id]) {
       return true;
@@ -712,8 +708,8 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
         {view === "stats" && (
           <>
             <header className="app-page-title">
-              <p className="app-eyebrow">Daily log</p>
-              <h1>Log</h1>
+              <p className="app-eyebrow">Recovery log</p>
+              <h1>Recovery</h1>
             </header>
             <main className="space-y-6">
 
@@ -728,42 +724,6 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
             />
 
             <Link href="/progress" className="block rounded-2xl border border-white/10 bg-[#111214] p-4 text-sm font-semibold text-amber-200">Skate sessions and cycles →</Link>
-
-            <section className="rounded-3xl border border-white/10 bg-[#111214] p-5 shadow-xl shadow-black/20">
-              <h2 className="text-2xl font-black tracking-tight text-white">Level progression</h2>
-              <div className="mt-5 space-y-5">
-                {statEntries.map(([key, meta]) => {
-                  const statXp = appState.statXp[key];
-                  const statLevel = getLevelData(statXp);
-
-                  return (
-                    <div key={key} className="rounded-2xl border border-white/10 bg-black/15 p-4">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-center gap-3">
-                          <span className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${meta.accent}`}>
-                            {meta.icon}
-                          </span>
-                          <div>
-                            <p className="text-xs uppercase tracking-[0.32em] text-slate-400">{meta.name}</p>
-                            <p className="text-2xl font-black text-white">Level {statLevel.level}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm uppercase tracking-[0.2em] text-slate-400">XP</p>
-                          <p className="text-xl font-bold text-amber-200">{statXp.toLocaleString()}</p>
-                        </div>
-                      </div>
-                      <div className="mt-4">
-                        <ProgressBar percent={statLevel.progress} />
-                      </div>
-                      <p className="mt-2 text-sm text-slate-300">
-                        {statLevel.currentLevelXp.toLocaleString()} / {statLevel.xpToNextLevel.toLocaleString()} XP to next level
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
             </main>
           </>
         )}
@@ -860,28 +820,6 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
               </div>
             </section>
 
-            <section>
-              <h2 className="mb-3 text-xl font-bold text-white">Character</h2>
-              <div className="app-character-grid">
-                {statEntries.map(([key, meta]) => {
-                  const statXp = appState.statXp[key];
-                  const statLevel = getLevelData(statXp);
-
-                  return (
-                    <div key={key} className="app-character-stat">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-bold uppercase tracking-[0.1em] text-amber-300">{meta.name}</span>
-                        <strong className="text-white">{statLevel.level}</strong>
-                      </div>
-                      <ProgressBar percent={statLevel.progress} />
-                      <span>{statXp.toLocaleString()} XP</span>
-                    </div>
-                  );
-                })}
-              </div>
-              <Link href="/stats" className="app-profile-link">Daily check-in and detailed progression →</Link>
-            </section>
-
             <section className="rounded-3xl border border-white/10 bg-[#111214] p-5 shadow-xl shadow-black/20">
               <h2 className="text-2xl font-black tracking-tight text-white">Settings</h2>
               <div className="mt-5 space-y-5">
@@ -914,41 +852,6 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
                     className="w-full rounded-2xl border border-white/10 bg-zinc-950 px-4 py-3 text-white outline-none focus:border-amber-400"
                   />
                 </div>
-                <div>
-                  <label className="mb-2 block text-sm font-medium uppercase tracking-[0.2em] text-slate-400">
-                    Daily task configuration
-                  </label>
-                  <div className="space-y-3">
-                    {appState.tasks.filter((task) => DAILY_CHECKLIST_TASK_IDS.some((id) => id === task.id)).map((task) => (
-                      <div key={task.id} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/15 p-3">
-                        <div>
-                          <p className="font-semibold text-white">{task.name}</p>
-                          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">{STAT_META[task.stat].name}</p>
-                        </div>
-                        <input
-                          type="number"
-                          min={50}
-                          step={50}
-                          value={task.xp}
-                          onChange={(event) => {
-                            const value = Number(event.target.value);
-                            if (!Number.isFinite(value)) {
-                              return;
-                            }
-
-                            setAppState((current) => ({
-                              ...current,
-                              tasks: current.tasks.map((currentTask) =>
-                                currentTask.id === task.id ? { ...currentTask, xp: value } : currentTask,
-                              ),
-                            }));
-                          }}
-                          className="w-24 rounded-xl border border-white/10 bg-zinc-950 px-3 py-2 text-right text-white outline-none focus:border-amber-400"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
                 <Link
                   href="/progress?baseline=1"
                   className="block w-full rounded-2xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-center font-bold text-amber-200 transition hover:bg-amber-400/15"
@@ -963,10 +866,9 @@ export default function SkateMasteryApp({ view }: { view: AppView }) {
 
         <MainNavigation
           active={
-            view === "workouts" ? "Train" :
-              view === "block" ? "Progress" :
-                view === "stats" || view === "calendar" ? "Log" :
-                  view === "settings" ? "Me" : "Today"
+            view === "workouts" || view === "calendar" ? "Workout" :
+              view === "stats" ? "Recovery" :
+                view === "settings" ? "Me" : "Skate"
           }
         />
       </div>
